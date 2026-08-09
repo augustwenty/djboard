@@ -169,6 +169,27 @@ input, textarea, select { font-family: inherit; }
 .note-card.pinned-card { border-style: solid; }
 .note-card.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
 .note-card.kbd-focus, .note-stack.kbd-focus { box-shadow: 0 0 0 3px var(--accent); border-radius: 12px; }
+.note-card.group-drop-target, .note-stack.group-drop-target {
+  outline: 3px dashed var(--accent);
+  outline-offset: 3px;
+  background: var(--accent-dim);
+}
+
+/* floating "drop to group" pill shown near a valid drop target while dragging */
+.drop-hint {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  background: var(--accent);
+  color: #05170c;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 45;
+  white-space: nowrap;
+}
+.drop-hint[hidden] { display: none; }
 
 /* rubber-band select box */
 .board-marquee {
@@ -525,6 +546,47 @@ input, textarea, select { font-family: inherit; }
   padding: 3px 8px;
   box-shadow: 0 2px 6px var(--shadow);
 }
+
+/* stack face — a renamable title slide, not a preview of a member note */
+.stack-title-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 90px;
+  text-align: center;
+}
+.stack-title-icon { font-size: 28px; opacity: 0.85; }
+.stack-name-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 600;
+  text-align: center;
+  padding: 3px 4px;
+  border-radius: 6px;
+  cursor: text;
+}
+.stack-name-input:hover, .stack-name-input:focus { background: var(--panel-2); }
+
+/* group panel modal title, renamable the same way */
+.group-title-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.group-title-input:hover, .group-title-input:focus { background: var(--panel-2); }
 
 /* ============ topbar pill buttons ============ */
 .pill-btn {

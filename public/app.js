@@ -46,6 +46,16 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+/* ============ destructive-action confirmation ============ */
+function confirmDeleteEnabled() {
+  return localStorage.getItem('mb-confirm-delete') !== '0';
+}
+// drop-in replacement for confirm() on delete/remove/clear actions — if the
+// user has turned confirmations off, the action proceeds immediately
+function confirmDestructive(message) {
+  return !confirmDeleteEnabled() || confirm(message);
+}
+
 /* ============ theme & font ============ */
 function applyPrefs() {
   const theme = localStorage.getItem('mb-theme') || 'dark';
@@ -225,8 +235,49 @@ function layoutBoardHeight() {
   board.style.height = Math.max(maxBottom + 24, 0) + 'px';
 }
 
+/* ============ drag-to-group (drop a card mostly on top of another to group them) ============ */
+const dropHint = document.createElement('div');
+dropHint.className = 'drop-hint';
+dropHint.textContent = '🗂 Drop to group';
+dropHint.hidden = true;
+document.body.appendChild(dropHint);
+
+function showDropHint(targetEl) {
+  const r = targetEl.getBoundingClientRect();
+  dropHint.style.left = r.left + r.width / 2 + 'px';
+  dropHint.style.top = r.top - 8 + 'px';
+  dropHint.hidden = false;
+}
+function hideDropHint() { dropHint.hidden = true; }
+
+// finds the board item most covered by the dragged element, if any single item is
+// covered more than half — used to offer "drop to group" while dragging a card/stack
+function findGroupDropTarget(draggedEl, excludeId, excludeType, allowedTypes) {
+  const dl = draggedEl.offsetLeft, dt = draggedEl.offsetTop;
+  const dr = dl + draggedEl.offsetWidth, db = dt + draggedEl.offsetHeight;
+  let best = null, bestRatio = 0.5; // must cover a strict majority of the candidate
+  for (const it of navItems()) {
+    if (it.id === excludeId && it.type === excludeType) continue;
+    if (!allowedTypes.includes(it.type)) continue;
+    const l = it.el.offsetLeft, t = it.el.offsetTop;
+    const r = l + it.el.offsetWidth, b = t + it.el.offsetHeight;
+    const ix = Math.max(0, Math.min(dr, r) - Math.max(dl, l));
+    const iy = Math.max(0, Math.min(db, b) - Math.max(dt, t));
+    const ratio = (ix * iy) / (it.el.offsetWidth * it.el.offsetHeight);
+    if (ratio > bestRatio) { bestRatio = ratio; best = it; }
+  }
+  return best;
+}
+
 function attachNoteDrag(card, n) {
-  let dragging = false, moved = false, start = null, group = null;
+  let dragging = false, moved = false, start = null, group = null, dropTarget = null;
+
+  const clearDropTarget = () => {
+    if (!dropTarget) return;
+    dropTarget.el.classList.remove('group-drop-target');
+    dropTarget = null;
+    hideDropHint();
+  };
 
   card.addEventListener('pointerdown', (e) => {
     if (document.documentElement.dataset.ui === 'mobile') return;
@@ -260,6 +311,17 @@ function attachNoteDrag(card, n) {
       g.card.style.top = g.n.y + 'px';
     });
     layoutBoardHeight();
+    // dropping onto another card/stack only makes sense when dragging a single card
+    if (group.length === 1) {
+      const found = findGroupDropTarget(card, n.id, 'note', ['note', 'stack']);
+      if (found !== dropTarget) {
+        clearDropTarget();
+        dropTarget = found;
+        if (dropTarget) { dropTarget.el.classList.add('group-drop-target'); showDropHint(dropTarget.el); }
+      } else if (dropTarget) {
+        showDropHint(dropTarget.el); // keep the hint pinned to the target as both elements move
+      }
+    }
   });
   card.addEventListener('pointerup', async (e) => {
     if (!dragging) return;
@@ -267,11 +329,23 @@ function attachNoteDrag(card, n) {
     if (!moved) { group = null; return; }
     group.forEach((g) => g.card.classList.remove('dragging'));
     card._suppressClick = true; // swallow the click that would otherwise open the note right after a drag
+    if (dropTarget) {
+      const target = dropTarget;
+      clearDropTarget();
+      group = null;
+      if (target.type === 'note') {
+        await api.send('POST', '/api/groups', { noteIds: [n.id, target.id], x: target.el.offsetLeft, y: target.el.offsetTop, z: boardTopZ() });
+      } else {
+        await api.send('PUT', '/api/notes/' + n.id, { groupId: target.id });
+      }
+      await loadData();
+      return;
+    }
     const toSave = group;
     group = null;
     await Promise.all(toSave.map((g) => api.send('PUT', '/api/notes/' + g.n.id, { x: g.n.x, y: g.n.y, z: g.n.z })));
   });
-  card.addEventListener('pointercancel', () => { dragging = false; group = null; });
+  card.addEventListener('pointercancel', () => { dragging = false; group = null; clearDropTarget(); });
 }
 
 /* ============ note groups (stacked decks) ============ */
@@ -279,17 +353,35 @@ function groupMembers(g) {
   return notes.filter((n) => n.groupId === g.id);
 }
 
-function stackCard(g, members, top) {
-  top = top || members.slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
+async function saveGroupName(g, inputEl) {
+  const name = inputEl.value.trim();
+  if (!name || name === g.name) { inputEl.value = g.name || ''; return; }
+  g.name = name;
+  await api.send('PUT', '/api/groups/' + g.id, { name });
+}
+
+// the stack's visible face is a title slide (renamable), not a preview of
+// whichever member note happens to be on top — open the group to see those
+function stackCard(g, members) {
   const wrap = document.createElement('div');
   wrap.className = 'note-stack';
   wrap.dataset.groupId = g.id;
   for (let i = 0; i < Math.min(2, members.length - 1); i++) {
     wrap.appendChild(document.createElement('div')).className = 'stack-peek';
   }
-  const card = noteCard(top);
-  card.onclick = null; // the stack, not the top card, owns click/drag here
-  wrap.appendChild(card);
+  const face = document.createElement('div');
+  face.className = 'note-card stack-title-card';
+  face.innerHTML = `
+    <div class="stack-title-icon">🗂</div>
+    <input class="stack-name-input" type="text" maxlength="60" placeholder="Untitled group" />
+  `;
+  const input = face.querySelector('.stack-name-input');
+  input.value = g.name || '';
+  input.addEventListener('pointerdown', (e) => e.stopPropagation());
+  input.addEventListener('click', (e) => e.stopPropagation());
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+  input.addEventListener('blur', () => saveGroupName(g, input));
+  wrap.appendChild(face);
   const badge = document.createElement('div');
   badge.className = 'stack-badge';
   badge.textContent = '🗂 ' + members.length;
@@ -298,7 +390,15 @@ function stackCard(g, members, top) {
 }
 
 function attachStackDrag(el, g) {
-  let dragging = false, moved = false, start = null;
+  let dragging = false, moved = false, start = null, dropTarget = null;
+
+  const clearDropTarget = () => {
+    if (!dropTarget) return;
+    dropTarget.el.classList.remove('group-drop-target');
+    dropTarget = null;
+    hideDropHint();
+  };
+
   el.addEventListener('pointerdown', (e) => {
     if (document.documentElement.dataset.ui === 'mobile') return;
     if (e.target.closest('button, input, a, img')) return;
@@ -322,20 +422,44 @@ function attachStackDrag(el, g) {
     el.style.left = g.x + 'px';
     el.style.top = g.y + 'px';
     layoutBoardHeight();
+    // a stack can only absorb a loose note by dropping onto it — merging two
+    // stacks together isn't supported yet, so only note cards count as targets
+    const found = findGroupDropTarget(el, g.id, 'stack', ['note']);
+    if (found !== dropTarget) {
+      clearDropTarget();
+      dropTarget = found;
+      if (dropTarget) { dropTarget.el.classList.add('group-drop-target'); showDropHint(dropTarget.el); }
+    } else if (dropTarget) {
+      showDropHint(dropTarget.el);
+    }
   });
   el.addEventListener('pointerup', async () => {
     if (!dragging) return;
     dragging = false;
     if (!moved) { openGroupModal(g); return; }
     el.classList.remove('dragging');
+    if (dropTarget) {
+      const target = dropTarget;
+      clearDropTarget();
+      await Promise.all([
+        api.send('PUT', '/api/groups/' + g.id, { x: g.x, y: g.y, z: g.z }),
+        api.send('PUT', '/api/notes/' + target.id, { groupId: g.id }),
+      ]);
+      await loadData();
+      return;
+    }
     await api.send('PUT', '/api/groups/' + g.id, { x: g.x, y: g.y, z: g.z });
   });
-  el.addEventListener('pointercancel', () => { dragging = false; });
+  el.addEventListener('pointercancel', () => { dragging = false; clearDropTarget(); });
 }
 
 function openGroupModal(g) {
   const members = groupMembers(g);
-  $('groupModalTitle').textContent = `🗂 ${members.length} notes`;
+  const titleInput = $('groupModalTitle');
+  titleInput.value = g.name || '';
+  titleInput.onblur = () => saveGroupName(g, titleInput);
+  titleInput.onkeydown = (e) => { if (e.key === 'Enter') titleInput.blur(); };
+  $('groupModalCount').textContent = `${members.length} note${members.length === 1 ? '' : 's'}`;
   const list = $('groupList');
   list.innerHTML = '';
   members
@@ -408,7 +532,7 @@ function refreshSelectionUI() {
     <button class="tool-btn sel-clear">✕ Clear</button>`;
   if (count >= 2) selectionBar.querySelector('.sel-group').onclick = () => groupSelectedNotes();
   selectionBar.querySelector('.sel-delete').onclick = async () => {
-    if (!confirm(`Delete ${count} note${count === 1 ? '' : 's'}?`)) return;
+    if (!confirmDestructive(`Delete ${count} note${count === 1 ? '' : 's'}?`)) return;
     const ids = [...selectedNoteIds];
     clearSelection();
     await Promise.all(ids.map((id) => api.send('DELETE', '/api/notes/' + id)));
@@ -614,9 +738,7 @@ function renderBoard() {
   });
 
   visibleGroups.forEach(({ g, members }) => {
-    const candidates = filtering ? members.filter(noteMatches) : members;
-    const top = (candidates.length ? candidates : members).slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
-    const el = stackCard(g, members, top);
+    const el = stackCard(g, members);
     el.style.left = (g.x ?? 20) + 'px';
     el.style.top = (g.y ?? 20) + 'px';
     el.style.zIndex = g.z || 1;
@@ -890,7 +1012,7 @@ $('saveNoteBtn').onclick = async () => {
   await loadData();
 };
 $('deleteNoteBtn').onclick = async () => {
-  if (!confirm('Delete this note?')) return;
+  if (!confirmDestructive('Delete this note?')) return;
   await api.send('DELETE', '/api/notes/' + editingNote.id);
   closeNoteModal();
   await loadData();
@@ -995,7 +1117,7 @@ function renderTagEditList() {
     del.textContent = '🗑';
     del.title = 'Delete tag';
     del.onclick = async () => {
-      if (!confirm(`Delete tag #${t.name}? It will be removed from all notes.`)) return;
+      if (!confirmDestructive(`Delete tag #${t.name}? It will be removed from all notes.`)) return;
       await api.send('DELETE', '/api/tags/' + t.id);
       activeTagIds.delete(t.id);
       await loadData();
@@ -1119,7 +1241,7 @@ function noteCtxItems(n) {
       label: '🗑 Delete note',
       danger: true,
       onclick: async () => {
-        if (!confirm('Delete this note?')) return;
+        if (!confirmDestructive('Delete this note?')) return;
         await api.send('DELETE', '/api/notes/' + n.id);
         await loadData();
       },
@@ -1136,7 +1258,7 @@ function groupCtxItems() {
       label: `🗑 Delete ${count} notes`,
       danger: true,
       onclick: async () => {
-        if (!confirm(`Delete ${count} notes?`)) return;
+        if (!confirmDestructive(`Delete ${count} notes?`)) return;
         const ids = [...selectedNoteIds];
         clearSelection();
         await Promise.all(ids.map((id) => api.send('DELETE', '/api/notes/' + id)));
@@ -1186,6 +1308,10 @@ function backgroundCtxItems() {
     { sep: true },
     { label: '◐ Toggle light / dark', onclick: () => $('themeToggle').click() },
     { label: '📺 Display mode', onclick: () => (location.href = 'display.html') },
+    {
+      label: confirmDeleteEnabled() ? '🛡 Confirm before delete: On' : '🛡 Confirm before delete: Off',
+      onclick: () => localStorage.setItem('mb-confirm-delete', confirmDeleteEnabled() ? '0' : '1'),
+    },
   ];
 }
 

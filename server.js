@@ -203,6 +203,7 @@ app.post('/api/groups', (req, res) => {
   if (noteIds.length < 2) return res.status(400).json({ error: 'A group needs at least 2 notes' });
   const group = {
     id: uid(),
+    name: req.body.name || `Group ${db.groups.length + 1}`,
     x: req.body.x ?? 20,
     y: req.body.y ?? 20,
     z: req.body.z ?? 1,
@@ -216,7 +217,7 @@ app.post('/api/groups', (req, res) => {
 app.put('/api/groups/:id', (req, res) => {
   const group = db.groups.find((g) => g.id === req.params.id);
   if (!group) return res.status(404).json({ error: 'Not found' });
-  for (const f of ['x', 'y', 'z']) if (f in req.body) group[f] = req.body[f];
+  for (const f of ['x', 'y', 'z', 'name']) if (f in req.body) group[f] = req.body[f];
   saveDb(db);
   res.json(group);
 });

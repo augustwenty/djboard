@@ -180,7 +180,8 @@
   <div id="groupModal" class="modal-overlay" hidden>
     <div class="modal group-modal">
       <div class="modal-head">
-        <span class="modal-title" id="groupModalTitle">Group</span>
+        <input id="groupModalTitle" class="group-title-input" type="text" maxlength="60" placeholder="Untitled group" />
+        <span id="groupModalCount" class="muted small"></span>
         <button class="icon-btn" id="closeGroupModal" title="Close">✕</button>
       </div>
       <div id="groupList" class="group-list"></div>

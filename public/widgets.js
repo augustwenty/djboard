@@ -7,6 +7,9 @@
   if (!canvas) return;
 
   const EDITABLE = !document.body.classList.contains('display-page');
+  // app.js (not loaded on display.html) defines the real, toggleable version;
+  // fall back to a plain confirm() if it's ever missing
+  const confirmDestructive = window.confirmDestructive || ((msg) => confirm(msg));
   const GRID = 10;
   const snap = (v) => Math.max(0, Math.round(v / GRID) * GRID);
 
@@ -1785,7 +1788,7 @@
     });
 
     el('wbClear').onclick = () => {
-      if (!confirm('Clear the whole whiteboard?')) return;
+      if (!confirmDestructive('Clear the whole whiteboard?')) return;
       wbRedo = [];
       wbWidget.config.strokes = [];
       markDirty();
@@ -1856,7 +1859,7 @@
       rm.title = 'Remove widget';
       rm.onclick = async (e) => {
         e.stopPropagation();
-        if (!confirm('Remove this widget?')) return;
+        if (!confirmDestructive('Remove this widget?')) return;
         await wapi.del(w.id);
         widgets = widgets.filter((x) => x.id !== w.id);
         renderAll();
@@ -2007,7 +2010,7 @@
       if (w && TYPES[w.type]?.configUI) openConfig(w);
     },
     async remove(id) {
-      if (!confirm('Remove this widget?')) return;
+      if (!confirmDestructive('Remove this widget?')) return;
       await wapi.del(id);
       widgets = widgets.filter((x) => x.id !== id);
       renderAll();
