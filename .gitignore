@@ -1,0 +1,17 @@
+# dependencies
+node_modules/
+
+# runtime data — notes, uploads, reminders, widget layouts.
+# NEVER commit: may contain personal notes and images.
+data/
+
+# secrets — auth password, session secret, etc.
+*.env
+!.env.example
+
+# local tooling / editor state (may contain machine-specific paths)
+.claude/
+*.log
+*.bak*
+Thumbs.db
+.DS_Store
