@@ -212,6 +212,18 @@ input, textarea, select { font-family: inherit; }
 }
 .drop-hint[hidden] { display: none; }
 
+/* thin guide line shown while a dragged card/stack's edge lines up with another one's */
+.align-guide {
+  position: fixed;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 45;
+  box-shadow: 0 0 4px var(--accent);
+}
+.align-guide[hidden] { display: none; }
+.align-guide-v { width: 2px; }
+.align-guide-h { height: 2px; }
+
 /* rubber-band select box */
 .board-marquee {
   position: fixed;

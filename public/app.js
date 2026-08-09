@@ -247,6 +247,64 @@ function layoutBoardHeight() {
   board.style.height = Math.max(maxBottom + 24, 0) + 'px';
 }
 
+/* ============ alignment guides (snap to another card/stack's edges while dragging) ============ */
+const ALIGN_THRESHOLD = 6; // px — how close an edge has to get before it snaps; never forced
+const alignGuideV = document.createElement('div');
+alignGuideV.className = 'align-guide align-guide-v';
+alignGuideV.hidden = true;
+const alignGuideH = document.createElement('div');
+alignGuideH.className = 'align-guide align-guide-h';
+alignGuideH.hidden = true;
+document.body.appendChild(alignGuideV);
+document.body.appendChild(alignGuideH);
+
+// checks the dragged box's left/right edges and top/bottom edges against every other
+// card/stack's edges, independently, and snaps to whichever single edge is closest on
+// each axis (if any is within ALIGN_THRESHOLD) — alignment is a nicety, never required
+function findAlignment(box, excludeKeys) {
+  let x = null, xDelta = ALIGN_THRESHOLD;
+  let y = null, yDelta = ALIGN_THRESHOLD;
+  const right = box.left + box.width, bottom = box.top + box.height;
+  for (const it of navItems()) {
+    if (excludeKeys.has(it.type + ':' + it.id)) continue;
+    const l = it.el.offsetLeft, t = it.el.offsetTop;
+    const r = l + it.el.offsetWidth, b = t + it.el.offsetHeight;
+    const spanTop = Math.min(t, box.top), spanBottom = Math.max(b, bottom);
+    const spanLeft = Math.min(l, box.left), spanRight = Math.max(r, right);
+    const dl = Math.abs(l - box.left), dr = Math.abs(r - right);
+    const dt = Math.abs(t - box.top), db = Math.abs(b - bottom);
+    if (dl < xDelta) { xDelta = dl; x = { snapLeft: l, guideX: l, top: spanTop, bottom: spanBottom }; }
+    if (dr < xDelta) { xDelta = dr; x = { snapLeft: r - box.width, guideX: r, top: spanTop, bottom: spanBottom }; }
+    if (dt < yDelta) { yDelta = dt; y = { snapTop: t, guideY: t, left: spanLeft, right: spanRight }; }
+    if (db < yDelta) { yDelta = db; y = { snapTop: b - box.height, guideY: b, left: spanLeft, right: spanRight }; }
+  }
+  return { x, y };
+}
+
+function showAlignGuides(align) {
+  const rect = $('board').getBoundingClientRect();
+  if (align.x) {
+    alignGuideV.style.left = rect.left + align.x.guideX + 'px';
+    alignGuideV.style.top = rect.top + align.x.top + 'px';
+    alignGuideV.style.height = align.x.bottom - align.x.top + 'px';
+    alignGuideV.hidden = false;
+  } else {
+    alignGuideV.hidden = true;
+  }
+  if (align.y) {
+    alignGuideH.style.top = rect.top + align.y.guideY + 'px';
+    alignGuideH.style.left = rect.left + align.y.left + 'px';
+    alignGuideH.style.width = align.y.right - align.y.left + 'px';
+    alignGuideH.hidden = false;
+  } else {
+    alignGuideH.hidden = true;
+  }
+}
+function hideAlignGuides() {
+  alignGuideV.hidden = true;
+  alignGuideH.hidden = true;
+}
+
 /* ============ drag-to-group (drop a card mostly on top of another to group them) ============ */
 const dropHint = document.createElement('div');
 dropHint.className = 'drop-hint';
@@ -316,9 +374,20 @@ function attachNoteDrag(card, n) {
       const z = boardTopZ();
       group.forEach((g) => { g.card.classList.add('dragging'); g.n.z = z; g.card.style.zIndex = z; });
     }
+    // align the card under the pointer against every other card/stack's edges; the
+    // rest of a multi-card drag rides along with whatever offset that snap produces
+    const primary = group.find((g) => g.n.id === n.id) || group[0];
+    const rawLeft = Math.max(0, primary.startX + dx);
+    const rawTop = Math.max(0, primary.startY + dy);
+    const excludeKeys = new Set(group.map((g) => 'note:' + g.n.id));
+    const align = findAlignment({ left: rawLeft, top: rawTop, width: card.offsetWidth, height: card.offsetHeight }, excludeKeys);
+    const snappedLeft = align.x ? align.x.snapLeft : snapBoard(rawLeft);
+    const snappedTop = align.y ? align.y.snapTop : snapBoard(rawTop);
+    showAlignGuides(align);
+    const finalDx = snappedLeft - primary.startX, finalDy = snappedTop - primary.startY;
     group.forEach((g) => {
-      g.n.x = snapBoard(Math.max(0, g.startX + dx));
-      g.n.y = snapBoard(Math.max(0, g.startY + dy));
+      g.n.x = Math.max(0, g.startX + finalDx);
+      g.n.y = Math.max(0, g.startY + finalDy);
       g.card.style.left = g.n.x + 'px';
       g.card.style.top = g.n.y + 'px';
     });
@@ -339,6 +408,7 @@ function attachNoteDrag(card, n) {
     if (!dragging) return;
     dragging = false;
     if (!moved) { group = null; return; }
+    hideAlignGuides();
     group.forEach((g) => g.card.classList.remove('dragging'));
     card._suppressClick = true; // swallow the click that would otherwise open the note right after a drag
     if (dropTarget) {
@@ -361,7 +431,7 @@ function attachNoteDrag(card, n) {
     group = null;
     await Promise.all(toSave.map((g) => api.send('PUT', '/api/notes/' + g.n.id, { x: g.n.x, y: g.n.y, z: g.n.z })));
   });
-  card.addEventListener('pointercancel', () => { dragging = false; group = null; clearDropTarget(); });
+  card.addEventListener('pointercancel', () => { dragging = false; group = null; clearDropTarget(); hideAlignGuides(); });
 }
 
 /* ============ note groups (stacked decks) ============ */
@@ -433,8 +503,12 @@ function attachStackDrag(el, g) {
       g.z = boardTopZ();
       el.style.zIndex = g.z;
     }
-    g.x = snapBoard(Math.max(0, start.x + dx));
-    g.y = snapBoard(Math.max(0, start.y + dy));
+    const rawLeft = Math.max(0, start.x + dx);
+    const rawTop = Math.max(0, start.y + dy);
+    const align = findAlignment({ left: rawLeft, top: rawTop, width: el.offsetWidth, height: el.offsetHeight }, new Set(['stack:' + g.id]));
+    g.x = align.x ? align.x.snapLeft : snapBoard(rawLeft);
+    g.y = align.y ? align.y.snapTop : snapBoard(rawTop);
+    showAlignGuides(align);
     el.style.left = g.x + 'px';
     el.style.top = g.y + 'px';
     layoutBoardHeight();
@@ -453,6 +527,7 @@ function attachStackDrag(el, g) {
     if (!dragging) return;
     dragging = false;
     if (!moved) { openGroupModal(g); return; }
+    hideAlignGuides();
     el.classList.remove('dragging');
     if (dropTarget) {
       const target = dropTarget;
@@ -466,7 +541,7 @@ function attachStackDrag(el, g) {
     }
     await api.send('PUT', '/api/groups/' + g.id, { x: g.x, y: g.y, z: g.z });
   });
-  el.addEventListener('pointercancel', () => { dragging = false; clearDropTarget(); });
+  el.addEventListener('pointercancel', () => { dragging = false; clearDropTarget(); hideAlignGuides(); });
 }
 
 function openGroupModal(g) {
