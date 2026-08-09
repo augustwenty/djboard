@@ -68,7 +68,7 @@ function inPeriod(n) {
 
 function noteCard(n) {
   const card = document.createElement('div');
-  card.className = 'note-card' + (n.pinned ? ' pinned-card' : '');
+  card.className = 'note-card' + (n.pinned ? ' pinned-card' : '') + (n.done ? ' done-card' : '');
   if (n.color) card.style.borderColor = n.color;
   if (n.textColor) card.style.color = n.textColor;
   const done = n.checklist.filter((c) => c.done).length;
@@ -88,6 +88,16 @@ function noteCard(n) {
     ).join('')}</div><div class="check-progress">${done}/${n.checklist.length} done</div>` : ''}
     ${n.images.length ? `<div class="card-images">${n.images.map((u) => `<img src="${u}" loading="lazy"/>`).join('')}</div>` : ''}
   `;
+
+  if (n.done) {
+    card.insertAdjacentHTML('beforeend', `
+      <svg class="done-mark" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M 6,93 C 24,79 39,63 51,51 C 63,39 78,23 94,7" />
+        <path d="M 7,92 C 23,80 38,61 50,52 C 65,37 79,21 93,8" />
+      </svg>
+    `);
+  }
+
   return card;
 }
 

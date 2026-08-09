@@ -891,7 +891,7 @@ body.display-page .topbar { padding-bottom: 6px; }
 .display-meta { font-size: 11px; color: var(--muted); margin-left: 4px; }
 body.display-page .board { position: static; column-width: 270px; column-gap: 16px; height: auto !important; }
 body.display-page .note-card {
-  position: static;
+  position: relative;
   width: auto;
   margin-bottom: 16px;
   break-inside: avoid;
