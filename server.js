@@ -144,6 +144,7 @@ app.post('/api/notes', (req, res) => {
     textColor: req.body.textColor || '',
     images: req.body.images || [],
     pinned: !!req.body.pinned,
+    done: !!req.body.done,
     reminder: req.body.reminder || null,
     x: req.body.x ?? null,
     y: req.body.y ?? null,
@@ -160,7 +161,7 @@ app.post('/api/notes', (req, res) => {
 app.put('/api/notes/:id', (req, res) => {
   const note = db.notes.find((n) => n.id === req.params.id);
   if (!note) return res.status(404).json({ error: 'Not found' });
-  const fields = ['title', 'text', 'checklist', 'tags', 'color', 'textColor', 'images', 'pinned', 'reminder', 'x', 'y', 'z', 'groupId'];
+  const fields = ['title', 'text', 'checklist', 'tags', 'color', 'textColor', 'images', 'pinned', 'done', 'reminder', 'x', 'y', 'z', 'groupId'];
   const prevGroupId = note.groupId;
   for (const f of fields) if (f in req.body) note[f] = req.body[f];
   note.updatedAt = new Date().toISOString();
@@ -209,9 +210,17 @@ app.post('/api/groups', (req, res) => {
     z: req.body.z ?? 1,
   };
   db.groups.push(group);
-  for (const n of db.notes) if (noteIds.includes(n.id)) n.groupId = group.id;
+  const vacatedGroupIds = new Set();
+  for (const n of db.notes) {
+    if (!noteIds.includes(n.id)) continue;
+    if (n.groupId && n.groupId !== group.id) vacatedGroupIds.add(n.groupId);
+    n.groupId = group.id;
+  }
   saveDb(db);
   res.json(group);
+  // a note pulled out of its old group (e.g. multi-selected into a brand new one)
+  // may have left that group too small to still make sense
+  for (const gid of vacatedGroupIds) dissolveIfTooSmall(gid);
 });
 
 app.put('/api/groups/:id', (req, res) => {

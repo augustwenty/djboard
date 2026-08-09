@@ -167,6 +167,27 @@ input, textarea, select { font-family: inherit; }
 .note-card:hover { box-shadow: 0 6px 18px var(--shadow); }
 .note-card.dragging { cursor: grabbing; opacity: 0.85; box-shadow: 0 10px 28px var(--shadow); transition: none; }
 .note-card.pinned-card { border-style: solid; }
+.note-card.done-card { cursor: pointer; }
+
+/* a big diagonal red marker stroke across a done card, bottom-left to top-right —
+   preserveAspectRatio="none" stretches the 0-100 viewBox to the card's real box,
+   whatever height its content gave it, so the stroke always spans true corner to corner */
+.done-mark {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  pointer-events: none;
+}
+.done-mark path {
+  fill: none;
+  stroke: #e2231a;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.done-mark path:first-child { stroke-width: 8; opacity: 0.92; }
+.done-mark path:last-child { stroke-width: 5; opacity: 0.5; }
 .note-card.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
 .note-card.kbd-focus, .note-stack.kbd-focus { box-shadow: 0 0 0 3px var(--accent); border-radius: 12px; }
 .note-card.group-drop-target, .note-stack.group-drop-target {
@@ -490,33 +511,26 @@ input, textarea, select { font-family: inherit; }
 .tag-edit-row .mini-btn.pin-on { color: var(--accent); border-color: var(--accent); }
 
 /* ============ group panel ============ */
-.group-modal { max-width: 480px; }
-.group-list { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
-.group-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  cursor: pointer;
-  text-align: left;
+.group-modal { max-width: 620px; }
+.group-list { display: flex; flex-wrap: wrap; gap: 14px; max-height: 70vh; overflow-y: auto; padding: 2px; }
+/* real note-cards, reused as-is, just laid out in-flow inside the modal instead of absolute-positioned on the board */
+.group-list .note-card { position: static; cursor: pointer; }
+.group-card-wrap { position: relative; }
+.group-card-remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 1;
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+  line-height: 1;
+  box-shadow: 0 2px 6px var(--shadow);
 }
-.group-row:hover { border-color: var(--accent); }
-.group-row .group-row-main { flex: 1; min-width: 0; }
-.group-row .group-row-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.group-row .group-row-sub { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.group-row .mini-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: 6px;
-  padding: 4px 8px;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-.group-row .mini-btn:hover { color: var(--danger); border-color: var(--danger); }
 
 /* stacked deck of cards on the board */
 .note-stack { position: absolute; width: 270px; cursor: grab; touch-action: none; }
@@ -545,6 +559,7 @@ input, textarea, select { font-family: inherit; }
   border-radius: 999px;
   padding: 3px 8px;
   box-shadow: 0 2px 6px var(--shadow);
+  pointer-events: none; /* purely informational — clicks pass through to the stack underneath */
 }
 
 /* stack face — a renamable title slide, not a preview of a member note */

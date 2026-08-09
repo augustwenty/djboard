@@ -143,7 +143,7 @@ function noteMatches(n) {
 
 function noteCard(n) {
   const card = document.createElement('div');
-  card.className = 'note-card' + (n.pinned ? ' pinned-card' : '') + (selectedNoteIds.has(n.id) ? ' selected' : '');
+  card.className = 'note-card' + (n.pinned ? ' pinned-card' : '') + (n.done ? ' done-card' : '') + (selectedNoteIds.has(n.id) ? ' selected' : '');
   if (n.color) card.style.borderColor = n.color;
   if (n.textColor) card.style.color = n.textColor;
 
@@ -200,6 +200,18 @@ function noteCard(n) {
       imgs.appendChild(img);
     }
     card.appendChild(imgs);
+  }
+
+  if (n.done) {
+    // two slightly offset strokes along the same bottom-left-to-top-right diagonal, like a
+    // real marker's double pass — viewBox stretches to the card's actual box (preserveAspectRatio="none")
+    // so it always reaches corner to corner no matter how tall the card's content makes it
+    card.insertAdjacentHTML('beforeend', `
+      <svg class="done-mark" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M 6,93 C 24,79 39,63 51,51 C 63,39 78,23 94,7" />
+        <path d="M 7,92 C 23,80 38,61 50,52 C 65,37 79,21 93,8" />
+      </svg>
+    `);
   }
 
   card.onclick = (e) => {
@@ -334,9 +346,13 @@ function attachNoteDrag(card, n) {
       clearDropTarget();
       group = null;
       if (target.type === 'note') {
-        await api.send('POST', '/api/groups', { noteIds: [n.id, target.id], x: target.el.offsetLeft, y: target.el.offsetTop, z: boardTopZ() });
+        await Promise.all([
+          api.send('POST', '/api/groups', { noteIds: [n.id, target.id], x: target.el.offsetLeft, y: target.el.offsetTop, z: boardTopZ() }),
+          // save where it was actually dropped, so an expanded view later doesn't snap it back to a stale spot
+          api.send('PUT', '/api/notes/' + n.id, { x: n.x, y: n.y }),
+        ]);
       } else {
-        await api.send('PUT', '/api/notes/' + n.id, { groupId: target.id });
+        await api.send('PUT', '/api/notes/' + n.id, { groupId: target.id, x: n.x, y: n.y });
       }
       await loadData();
       return;
@@ -466,20 +482,19 @@ function openGroupModal(g) {
     .slice()
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
     .forEach((n) => {
-      const row = document.createElement('div');
-      row.className = 'group-row';
-      const title = n.title || (n.text || '').split('\n')[0].slice(0, 60) || '(untitled)';
-      const sub = n.checklist.length
-        ? `${n.checklist.filter((c) => c.done).length}/${n.checklist.length} done`
-        : (n.text || '').replace(/\n/g, ' ').slice(0, 80);
-      const main = document.createElement('span');
-      main.className = 'group-row-main';
-      main.innerHTML = `<span class="group-row-title">${esc(title)}</span><span class="group-row-sub">${esc(sub)}</span>`;
-      row.appendChild(main);
+      const wrap = document.createElement('div');
+      wrap.className = 'group-card-wrap';
+      const card = noteCard(n);
+      card.onclick = (e) => {
+        if (e.shiftKey || e.metaKey || e.ctrlKey) { e.stopPropagation(); toggleSelect(n.id, true); return; }
+        closeGroupModal();
+        openNoteModal(n);
+      };
+      wrap.appendChild(card);
       const rm = document.createElement('button');
-      rm.className = 'mini-btn';
-      rm.textContent = '↗ Remove';
+      rm.className = 'group-card-remove';
       rm.title = 'Take this note out of the group';
+      rm.textContent = '✕';
       rm.onclick = async (e) => {
         e.stopPropagation();
         await api.send('PUT', '/api/notes/' + n.id, { groupId: null });
@@ -487,9 +502,8 @@ function openGroupModal(g) {
         const stillGroup = groups.find((x) => x.id === g.id);
         if (stillGroup) openGroupModal(stillGroup); else closeGroupModal();
       };
-      row.appendChild(rm);
-      row.onclick = () => { closeGroupModal(); openNoteModal(n); };
-      list.appendChild(row);
+      wrap.appendChild(rm);
+      list.appendChild(wrap);
     });
   $('ungroupBtn').onclick = async () => {
     await api.send('DELETE', '/api/groups/' + g.id);
@@ -714,6 +728,7 @@ function renderBoard() {
   const visibleGroups = groups
     .map((g) => ({ g, members: groupMembers(g) }))
     .filter(({ members }) => members.length >= 2 && (!filtering || members.some(noteMatches)));
+
   $('emptyState').hidden = notes.length > 0;
 
   if (notes.length && !ungrouped.length && !visibleGroups.length) {
@@ -777,7 +792,7 @@ function openNoteModal(n) {
   editingIsNew = !n;
   editingNote = n
     ? JSON.parse(JSON.stringify(n))
-    : { title: '', text: '', checklist: [], tags: [], color: '', textColor: '', images: [], pinned: false };
+    : { title: '', text: '', checklist: [], tags: [], color: '', textColor: '', images: [], pinned: false, done: false };
   editingMode = editingNote.checklist.length ? 'list' : 'note';
 
   $('noteModalDates').textContent = n
@@ -787,6 +802,7 @@ function openNoteModal(n) {
   $('noteText').value = editingNote.text;
   $('deleteNoteBtn').style.display = editingIsNew ? 'none' : '';
   updatePinBtn();
+  updateDoneBtn();
   loadReminderEditor();
   setMode(editingMode);
   renderChecklistEditor();
@@ -820,6 +836,15 @@ function updatePinBtn() {
 $('pinNoteBtn').onclick = () => {
   editingNote.pinned = !editingNote.pinned;
   updatePinBtn();
+};
+
+function updateDoneBtn() {
+  $('doneNoteBtn').classList.toggle('pinned-active', editingNote.done);
+  $('doneNoteBtn').textContent = editingNote.done ? '✓ Done' : '☐ Mark done';
+}
+$('doneNoteBtn').onclick = () => {
+  editingNote.done = !editingNote.done;
+  updateDoneBtn();
 };
 
 /* --- reminder editor --- */
@@ -1207,11 +1232,18 @@ function colorSwatchMenuRow(current, onPick) {
 }
 
 function noteCtxItems(n) {
-  return [
+  const items = [
     {
       label: n.pinned ? '📌 Unpin note' : '📌 Pin note',
       onclick: async () => {
         await api.send('PUT', '/api/notes/' + n.id, { pinned: !n.pinned });
+        await loadData();
+      },
+    },
+    {
+      label: n.done ? '☐ Mark not done' : '✓ Mark done',
+      onclick: async () => {
+        await api.send('PUT', '/api/notes/' + n.id, { done: !n.done });
         await loadData();
       },
     },
@@ -1235,6 +1267,21 @@ function noteCtxItems(n) {
         setTimeout(() => $('reminderEditor').classList.remove('flash'), 1200);
       },
     },
+  ];
+  // only reachable via right-click inside the group modal — grouped notes aren't individually on the board
+  if (n.groupId) {
+    const gid = n.groupId;
+    items.push({
+      label: '↗ Remove from group',
+      onclick: async () => {
+        await api.send('PUT', '/api/notes/' + n.id, { groupId: null });
+        await loadData();
+        const stillGroup = groups.find((x) => x.id === gid);
+        if (stillGroup) openGroupModal(stillGroup); else closeGroupModal();
+      },
+    });
+  }
+  items.push(
     { label: '✏️ Edit note', onclick: () => openNoteModal(n) },
     { sep: true },
     {
@@ -1246,7 +1293,8 @@ function noteCtxItems(n) {
         await loadData();
       },
     },
-  ];
+  );
+  return items;
 }
 
 function groupCtxItems() {
