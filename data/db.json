@@ -1,0 +1,209 @@
+{
+  "notes": [
+    {
+      "id": "e6da7f143db3ac06",
+      "title": "new 123",
+      "text": "",
+      "checklist": [],
+      "tags": [],
+      "color": "",
+      "textColor": "",
+      "images": [],
+      "pinned": false,
+      "reminder": null,
+      "x": 850,
+      "y": 390,
+      "z": 60,
+      "groupId": null,
+      "createdAt": "2026-08-09T12:42:56.618Z",
+      "updatedAt": "2026-08-09T12:44:24.533Z"
+    },
+    {
+      "id": "3cef07041e384137",
+      "title": "build the two remaining cabinets",
+      "text": "",
+      "checklist": [],
+      "tags": [],
+      "color": "",
+      "textColor": "",
+      "images": [],
+      "pinned": false,
+      "reminder": null,
+      "x": 858,
+      "y": 93,
+      "z": 1,
+      "groupId": null,
+      "createdAt": "2026-08-09T02:56:08.513Z",
+      "updatedAt": "2026-08-09T02:56:08.529Z"
+    },
+    {
+      "id": "8c3b36af5c432aa5",
+      "title": "paint the wall",
+      "text": "",
+      "checklist": [],
+      "tags": [],
+      "color": "",
+      "textColor": "",
+      "images": [],
+      "pinned": false,
+      "reminder": null,
+      "x": 858,
+      "y": 0,
+      "z": 1,
+      "groupId": null,
+      "createdAt": "2026-08-09T02:55:54.421Z",
+      "updatedAt": "2026-08-09T02:55:54.444Z"
+    },
+    {
+      "id": "c223ef78b3d15b6c",
+      "title": "return receptacles - home depot",
+      "text": "",
+      "checklist": [],
+      "tags": [
+        "3dc70e9dec86e4e2"
+      ],
+      "color": "",
+      "textColor": "",
+      "images": [],
+      "pinned": false,
+      "reminder": null,
+      "x": 570,
+      "y": 50,
+      "z": 58,
+      "groupId": null,
+      "createdAt": "2026-08-09T02:48:15.999Z",
+      "updatedAt": "2026-08-09T12:43:43.888Z"
+    },
+    {
+      "id": "df6112a3075b5e04",
+      "title": "review signage for improper a20 case",
+      "text": "",
+      "checklist": [],
+      "tags": [
+        "d4bd548f0f7ec363"
+      ],
+      "color": "",
+      "textColor": "",
+      "images": [],
+      "pinned": false,
+      "reminder": null,
+      "x": 280,
+      "y": 40,
+      "z": 57,
+      "createdAt": "2026-08-08T03:11:17.072Z",
+      "updatedAt": "2026-08-09T12:43:42.907Z"
+    },
+    {
+      "id": "67f0eda26f52ba2f",
+      "title": "Finish the contract for BoundTree",
+      "text": "",
+      "checklist": [],
+      "tags": [
+        "d4bd548f0f7ec363"
+      ],
+      "color": "",
+      "textColor": "",
+      "images": [],
+      "pinned": false,
+      "reminder": null,
+      "x": 0,
+      "y": 240,
+      "z": 30,
+      "createdAt": "2026-08-08T02:53:26.157Z",
+      "updatedAt": "2026-08-09T02:48:39.898Z"
+    },
+    {
+      "id": "745210d5fe4f932f",
+      "title": "draft articles for website",
+      "text": "",
+      "checklist": [],
+      "tags": [
+        "d4bd548f0f7ec363"
+      ],
+      "color": "#f87171",
+      "textColor": "",
+      "images": [],
+      "pinned": false,
+      "reminder": null,
+      "x": 280,
+      "y": 200,
+      "z": 56,
+      "createdAt": "2026-08-08T02:52:59.317Z",
+      "updatedAt": "2026-08-09T12:43:42.265Z"
+    },
+    {
+      "id": "59b824941c957ac5",
+      "title": "email visit information",
+      "text": "Send an email to Paul and Brent asking them when they wanna come visit the new office",
+      "checklist": [],
+      "tags": [
+        "d4bd548f0f7ec363"
+      ],
+      "color": "",
+      "textColor": "",
+      "images": [],
+      "pinned": false,
+      "reminder": null,
+      "x": 0,
+      "y": 370,
+      "z": 31,
+      "createdAt": "2026-08-08T02:52:42.918Z",
+      "updatedAt": "2026-08-09T02:48:41.280Z"
+    },
+    {
+      "id": "0ae428997e89772e",
+      "title": "paint color matching",
+      "text": "Get the hex code from our branding document and figure out what color I need to buy from Sherwin-Williams",
+      "checklist": [],
+      "tags": [
+        "d4bd548f0f7ec363"
+      ],
+      "color": "",
+      "textColor": "",
+      "images": [],
+      "pinned": false,
+      "reminder": null,
+      "x": 850,
+      "y": 200,
+      "z": 32,
+      "createdAt": "2026-08-08T02:52:20.951Z",
+      "updatedAt": "2026-08-09T02:56:15.113Z",
+      "groupId": null
+    },
+    {
+      "id": "0ad7815c87e779d0",
+      "title": "",
+      "text": "https://www.linkedin.com/posts/ai-projects-with-raspberry-pi-is-out-now-share-7485289481609179136-p5d0/?utm_medium=ios_app&rcm=ACoAAABOFCoBnhlUD12r-hgx4Llhk3DuxHAm41Y&utm_source=social_share_send&utm_campaign=messages",
+      "checklist": [],
+      "tags": [],
+      "color": "",
+      "textColor": "",
+      "images": [],
+      "pinned": false,
+      "reminder": null,
+      "x": 0,
+      "y": 0,
+      "z": 1,
+      "createdAt": "2026-08-08T02:51:43.336Z",
+      "updatedAt": "2026-08-08T02:51:43.349Z"
+    }
+  ],
+  "tags": [
+    {
+      "id": "3dc70e9dec86e4e2",
+      "name": "HOME",
+      "color": "#64a4e8",
+      "pinned": false
+    },
+    {
+      "id": "d4bd548f0f7ec363",
+      "name": "A20",
+      "color": "#4ade80",
+      "pinned": false
+    }
+  ],
+  "widgets": [],
+  "settings": {},
+  "reminders": [],
+  "groups": []
+}

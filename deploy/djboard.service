@@ -1,0 +1,28 @@
+# systemd unit for the DJBoard server itself.
+#
+# Install:
+#   sudo cp deploy/djboard.service /etc/systemd/system/djboard.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now djboard.service
+#
+# Before installing, edit User / WorkingDirectory below to match where you
+# cloned the repo, and confirm the node path with: which node
+# (if node was installed via nvm, systemd won't see your shell's PATH or
+# nvm shims — use the full path nvm gives you, e.g. /home/pi/.nvm/versions/node/vXX.X.X/bin/node)
+
+[Unit]
+Description=DJBoard note board server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/djboard
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
