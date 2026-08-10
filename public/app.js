@@ -974,6 +974,10 @@ function renderChecklistEditor() {
   editingNote.checklist.forEach((item, idx) => {
     const row = document.createElement('div');
     row.className = 'checklist-row';
+    const handle = document.createElement('span');
+    handle.className = 'checklist-drag-handle';
+    handle.textContent = '⠿';
+    handle.title = 'Drag to reorder';
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = item.done;
@@ -993,8 +997,43 @@ function renderChecklistEditor() {
       editingNote.checklist.splice(idx, 1);
       renderChecklistEditor();
     };
-    row.append(cb, txt, rm);
+    row.append(handle, cb, txt, rm);
     wrap.appendChild(row);
+    attachChecklistDragHandle(row, handle);
+  });
+}
+
+// drag a row's handle up/down over the other (static) rows' midpoints to
+// figure out where it should land, then commit the reorder on drop
+function attachChecklistDragHandle(row, handle) {
+  handle.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const wrap = $('checklistItems');
+    const rows = [...wrap.querySelectorAll('.checklist-row')];
+    const fromIdx = rows.indexOf(row);
+    if (fromIdx === -1) return;
+    const others = rows
+      .filter((r) => r !== row)
+      .map((r) => ({ mid: r.getBoundingClientRect().top + r.getBoundingClientRect().height / 2 }));
+    row.classList.add('dragging');
+    let toIdx = fromIdx;
+    const startY = e.clientY;
+
+    const onMove = (e) => {
+      row.style.transform = `translateY(${e.clientY - startY}px)`;
+      toIdx = others.filter((o) => e.clientY > o.mid).length;
+    };
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      if (toIdx !== fromIdx) {
+        const [moved] = editingNote.checklist.splice(fromIdx, 1);
+        editingNote.checklist.splice(toIdx, 0, moved);
+      }
+      renderChecklistEditor();
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
   });
 }
 function addChecklistItem() {

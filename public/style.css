@@ -388,6 +388,20 @@ input, textarea, select { font-family: inherit; }
   font-size: 14px;
 }
 .checklist-row .remove-item:hover { color: var(--danger); }
+.checklist-drag-handle {
+  cursor: grab;
+  color: var(--muted);
+  font-size: 14px;
+  touch-action: none;
+  user-select: none;
+}
+.checklist-row.dragging {
+  position: relative;
+  z-index: 1;
+  cursor: grabbing;
+  opacity: 0.85;
+}
+.checklist-row.dragging .checklist-drag-handle { cursor: grabbing; }
 
 .note-images-edit { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
 .img-thumb { position: relative; }
