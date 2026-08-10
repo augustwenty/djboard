@@ -90,6 +90,7 @@ automatically on start (no need to `export` anything by hand).
 | `SESSION_SECRET` | *(random each boot)* | Signs the session cookie; set this so logins survive a restart |
 | `COOKIE_SECURE` | *(unset)* | Set to `1` if DJBoard is served over HTTPS |
 | `KIOSK_TOKEN` | *(unset)* | Lets the Pi kiosk skip the login page and land straight on Display mode — see [Raspberry Pi + TV kiosk](#raspberry-pi--tv-kiosk) |
+| `KIOSK_THEME` | *(unset)* | Forces the kiosk's Display mode into `light` or `dark` — see [Raspberry Pi + TV kiosk](#raspberry-pi--tv-kiosk) |
 
 ## Docker
 
@@ -121,6 +122,8 @@ volumes:
 
 Want DJBoard running on a Pi with a TV showing the auto-refreshing, read-only
 board? See [`deploy/`](deploy/) for a systemd unit plus a kiosk boot script.
+Set `KIOSK_THEME=light` (or `dark`) in `.env` to pin the display's theme
+regardless of whatever's saved in the kiosk browser's localStorage.
 
 ## Security notes
 

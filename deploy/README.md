@@ -34,6 +34,10 @@ If you set `AUTH_PASSWORD`, also set `KIOSK_TOKEN` in that same `.env` file
 appends it to the display URL so the TV skips the login page — see
 [Editing notes](#editing-notes) below.
 
+To pin the TV's theme regardless of whatever's saved in the kiosk browser's
+localStorage, set `KIOSK_THEME=light` (or `dark`) in the same `.env` file —
+`kiosk.sh` picks it up the same way it does `KIOSK_TOKEN`.
+
 ## 2. Install a minimal X session + Chromium
 
 ```bash

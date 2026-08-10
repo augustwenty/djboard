@@ -14,8 +14,12 @@ function fmtDate(iso) {
     d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-// apply saved theme/font
-document.documentElement.dataset.theme = localStorage.getItem('mb-theme') || 'light';
+// apply saved theme/font — a ?theme=light|dark URL param (e.g. from a kiosk
+// launcher) overrides whatever's saved, so a stale localStorage value on a
+// device you don't interact with can't get stuck
+const themeParam = new URLSearchParams(location.search).get('theme');
+const theme = (themeParam === 'light' || themeParam === 'dark') ? themeParam : (localStorage.getItem('mb-theme') || 'light');
+document.documentElement.dataset.theme = theme;
 document.documentElement.dataset.font = localStorage.getItem('mb-font') || 'roboto';
 
 // mobile / desktop layout mode (auto-detect + manual override)
