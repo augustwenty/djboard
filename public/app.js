@@ -446,37 +446,78 @@ async function saveGroupName(g, inputEl) {
   await api.send('PUT', '/api/groups/' + g.id, { name });
 }
 
-// the stack's visible face is a title slide (renamable), not a preview of
-// whichever member note happens to be on top — open the group to see those
+// the group's board face is a live checklist: one row per member note, with
+// the row's checkbox mirroring that note's own `done` flag, its text opening
+// the full note, and an ✕ that pops the note back out into its own card
 function stackCard(g, members) {
   const wrap = document.createElement('div');
   wrap.className = 'note-stack';
   wrap.dataset.groupId = g.id;
-  for (let i = 0; i < Math.min(2, members.length - 1); i++) {
-    wrap.appendChild(document.createElement('div')).className = 'stack-peek';
-  }
-  const face = document.createElement('div');
-  face.className = 'note-card stack-title-card';
-  face.innerHTML = `
-    <div class="stack-title-icon">🗂</div>
-    <input class="stack-name-input" type="text" maxlength="60" placeholder="Untitled group" />
-  `;
-  const input = face.querySelector('.stack-name-input');
+
+  const header = document.createElement('div');
+  header.className = 'stack-header';
+  const icon = document.createElement('span');
+  icon.className = 'stack-title-icon';
+  icon.textContent = '🗂';
+  const input = document.createElement('input');
+  input.className = 'stack-name-input';
+  input.type = 'text';
+  input.maxLength = 60;
+  input.placeholder = 'Untitled group';
   input.value = g.name || '';
   input.addEventListener('pointerdown', (e) => e.stopPropagation());
   input.addEventListener('click', (e) => e.stopPropagation());
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
   input.addEventListener('blur', () => saveGroupName(g, input));
-  wrap.appendChild(face);
-  const badge = document.createElement('div');
+  const badge = document.createElement('span');
   badge.className = 'stack-badge';
-  badge.textContent = '🗂 ' + members.length;
-  wrap.appendChild(badge);
+  badge.textContent = members.length;
+  header.append(icon, input, badge);
+  wrap.appendChild(header);
+
+  const list = document.createElement('div');
+  list.className = 'card-checklist group-checklist';
+  members
+    .slice()
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+    .forEach((n) => {
+      const row = document.createElement('div');
+      row.className = 'check-item' + (n.done ? ' done' : '');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = n.done;
+      cb.onclick = async (e) => {
+        e.stopPropagation();
+        await api.send('PUT', '/api/notes/' + n.id, { done: cb.checked });
+        await loadData();
+      };
+      const span = document.createElement('span');
+      span.className = 'group-row-text';
+      span.textContent = n.title || n.text || 'Untitled note';
+      span.dataset.noteId = n.id;
+      const rm = document.createElement('button');
+      rm.className = 'remove-item';
+      rm.title = 'Take this note out of the group';
+      rm.textContent = '✕';
+      rm.onclick = async (e) => {
+        e.stopPropagation();
+        await api.send('PUT', '/api/notes/' + n.id, { groupId: null });
+        await loadData();
+      };
+      row.append(cb, span, rm);
+      list.appendChild(row);
+    });
+  wrap.appendChild(list);
   return wrap;
 }
 
+// group cards are dragged via document-level listeners added only while a
+// drag is in progress (rather than el.setPointerCapture, which — for reasons
+// that didn't reproduce with plain note cards — was leaving the card stuck
+// to the pointer with no way to release it). A pointerup anywhere on the
+// page always reaches document, so this can't get stuck the same way.
 function attachStackDrag(el, g) {
-  let dragging = false, moved = false, start = null, dropTarget = null;
+  let dragging = false, moved = false, start = null, dropTarget = null, pressedNoteId = null, activePointerId = null;
 
   const clearDropTarget = () => {
     if (!dropTarget) return;
@@ -485,16 +526,8 @@ function attachStackDrag(el, g) {
     hideDropHint();
   };
 
-  el.addEventListener('pointerdown', (e) => {
-    if (document.documentElement.dataset.ui === 'mobile') return;
-    if (e.target.closest('button, input, a, img')) return;
-    moved = false;
-    dragging = true;
-    start = { px: e.clientX, py: e.clientY, x: g.x, y: g.y };
-    try { el.setPointerCapture(e.pointerId); } catch {}
-  });
-  el.addEventListener('pointermove', (e) => {
-    if (!dragging) return;
+  const onMove = (e) => {
+    if (!dragging || e.pointerId !== activePointerId) return;
     const dx = e.clientX - start.px, dy = e.clientY - start.py;
     if (!moved) {
       if (Math.hypot(dx, dy) < 5) return;
@@ -522,11 +555,24 @@ function attachStackDrag(el, g) {
     } else if (dropTarget) {
       showDropHint(dropTarget.el);
     }
-  });
-  el.addEventListener('pointerup', async () => {
+  };
+
+  const stopListening = () => {
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    document.removeEventListener('pointercancel', onCancel);
+  };
+
+  const onUp = async (e) => {
+    if (e.pointerId !== activePointerId) return;
+    stopListening();
     if (!dragging) return;
     dragging = false;
-    if (!moved) { openGroupModal(g); return; }
+    if (!moved) {
+      const n = pressedNoteId && notes.find((x) => x.id === pressedNoteId);
+      if (n) openNoteModal(n);
+      return;
+    }
     hideAlignGuides();
     el.classList.remove('dragging');
     if (dropTarget) {
@@ -540,57 +586,33 @@ function attachStackDrag(el, g) {
       return;
     }
     await api.send('PUT', '/api/groups/' + g.id, { x: g.x, y: g.y, z: g.z });
-  });
-  el.addEventListener('pointercancel', () => { dragging = false; clearDropTarget(); hideAlignGuides(); });
-}
-
-function openGroupModal(g) {
-  const members = groupMembers(g);
-  const titleInput = $('groupModalTitle');
-  titleInput.value = g.name || '';
-  titleInput.onblur = () => saveGroupName(g, titleInput);
-  titleInput.onkeydown = (e) => { if (e.key === 'Enter') titleInput.blur(); };
-  $('groupModalCount').textContent = `${members.length} note${members.length === 1 ? '' : 's'}`;
-  const list = $('groupList');
-  list.innerHTML = '';
-  members
-    .slice()
-    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-    .forEach((n) => {
-      const wrap = document.createElement('div');
-      wrap.className = 'group-card-wrap';
-      const card = noteCard(n);
-      card.onclick = (e) => {
-        if (e.shiftKey || e.metaKey || e.ctrlKey) { e.stopPropagation(); toggleSelect(n.id, true); return; }
-        closeGroupModal();
-        openNoteModal(n);
-      };
-      wrap.appendChild(card);
-      const rm = document.createElement('button');
-      rm.className = 'group-card-remove';
-      rm.title = 'Take this note out of the group';
-      rm.textContent = '✕';
-      rm.onclick = async (e) => {
-        e.stopPropagation();
-        await api.send('PUT', '/api/notes/' + n.id, { groupId: null });
-        await loadData();
-        const stillGroup = groups.find((x) => x.id === g.id);
-        if (stillGroup) openGroupModal(stillGroup); else closeGroupModal();
-      };
-      wrap.appendChild(rm);
-      list.appendChild(wrap);
-    });
-  $('ungroupBtn').onclick = async () => {
-    await api.send('DELETE', '/api/groups/' + g.id);
-    closeGroupModal();
-    await loadData();
   };
-  $('groupModal').hidden = false;
+
+  const onCancel = (e) => {
+    if (e.pointerId !== activePointerId) return;
+    stopListening();
+    dragging = false;
+    clearDropTarget();
+    hideAlignGuides();
+    el.classList.remove('dragging');
+  };
+
+  el.addEventListener('pointerdown', (e) => {
+    if (document.documentElement.dataset.ui === 'mobile') return;
+    if (e.target.closest('button, input, a, img')) return;
+    moved = false;
+    dragging = true;
+    activePointerId = e.pointerId;
+    start = { px: e.clientX, py: e.clientY, x: g.x, y: g.y };
+    // capture which row (if any) was pressed now, while e.target still
+    // reflects the actual element under the pointer
+    const rowText = e.target.closest('.group-row-text');
+    pressedNoteId = rowText ? rowText.dataset.noteId : null;
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onCancel);
+  });
 }
-function closeGroupModal() { $('groupModal').hidden = true; }
-$('closeGroupModal').onclick = closeGroupModal;
-$('closeGroupModalBtn').onclick = closeGroupModal;
-$('groupModal').addEventListener('mousedown', (e) => { if (e.target === $('groupModal')) closeGroupModal(); });
 
 async function groupSelectedNotes() {
   const ids = [...selectedNoteIds];
@@ -644,7 +666,7 @@ function clearSelection() {
 function attachMarquee(board) {
   let marqueeStart = null, marqueeEl = null, base = null;
   board.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('.note-card') || e.button !== 0) return;
+    if (e.target.closest('.note-card, .note-stack') || e.button !== 0) return;
     const additive = e.shiftKey || e.metaKey || e.ctrlKey;
     if (!additive) clearSelection();
     base = new Set(selectedNoteIds);
@@ -778,19 +800,14 @@ function navigate(dir) {
 }
 
 function anyModalOpen() {
-  return !$('noteModal').hidden || !$('tagModal').hidden || !$('groupModal').hidden ||
+  return !$('noteModal').hidden || !$('tagModal').hidden ||
     !$('widgetConfigModal').hidden || !$('wbOverlay').hidden;
 }
 
 function openKbdFocused() {
-  if (!kbdFocus) return;
-  if (kbdFocus.type === 'note') {
-    const n = notes.find((x) => x.id === kbdFocus.id);
-    if (n) openNoteModal(n);
-  } else {
-    const g = groups.find((x) => x.id === kbdFocus.id);
-    if (g) openGroupModal(g);
-  }
+  if (!kbdFocus || kbdFocus.type !== 'note') return;
+  const n = notes.find((x) => x.id === kbdFocus.id);
+  if (n) openNoteModal(n);
 }
 
 function renderBoard() {
@@ -1159,6 +1176,11 @@ $('deleteNoteBtn').onclick = async () => {
 $('cancelNoteBtn').onclick = closeNoteModal;
 $('closeNoteModal').onclick = closeNoteModal;
 $('addNoteBtn').onclick = () => openNoteModal(null);
+// Enter in the title field saves — noteText is a textarea, so Enter there
+// still just inserts a newline
+$('noteTitle').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); $('saveNoteBtn').click(); }
+});
 
 /* ============ tag modal ============ */
 function openTagModal(mode) {
@@ -1382,19 +1404,6 @@ function noteCtxItems(n) {
       },
     },
   ];
-  // only reachable via right-click inside the group modal — grouped notes aren't individually on the board
-  if (n.groupId) {
-    const gid = n.groupId;
-    items.push({
-      label: '↗ Remove from group',
-      onclick: async () => {
-        await api.send('PUT', '/api/notes/' + n.id, { groupId: null });
-        await loadData();
-        const stillGroup = groups.find((x) => x.id === gid);
-        if (stillGroup) openGroupModal(stillGroup); else closeGroupModal();
-      },
-    });
-  }
   items.push(
     { label: '✏️ Edit note', onclick: () => openNoteModal(n) },
     { sep: true },
@@ -1433,13 +1442,22 @@ function groupCtxItems() {
 }
 
 function stackCtxItems(g) {
-  const count = groupMembers(g).length;
   return [
-    { label: `📂 Open group (${count})`, onclick: () => openGroupModal(g) },
+    {
+      label: '💥 Ungroup all',
+      onclick: async () => {
+        await api.send('DELETE', '/api/groups/' + g.id);
+        await loadData();
+      },
+    },
     { sep: true },
     {
-      label: '💥 Ungroup',
+      label: '🗑 Delete group and its notes',
+      danger: true,
       onclick: async () => {
+        const members = groupMembers(g);
+        if (!confirmDestructive(`Delete this group and all ${members.length} notes in it? This can't be undone.`)) return;
+        await Promise.all(members.map((n) => api.send('DELETE', '/api/notes/' + n.id)));
         await api.send('DELETE', '/api/groups/' + g.id);
         await loadData();
       },

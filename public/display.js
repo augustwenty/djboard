@@ -2,7 +2,9 @@
 
 let notes = [];
 let tags = [];
-let period = localStorage.getItem('mb-display-period') || 'all';
+// not saved across reloads on purpose — a kiosk device should always come
+// up showing everything, regardless of what was last clicked on it
+let period = 'all';
 
 const $ = (id) => document.getElementById(id);
 const tagById = (id) => tags.find((t) => t.id === id);
@@ -135,7 +137,6 @@ function render() {
 document.querySelectorAll('.period-btn').forEach((b) => {
   b.onclick = () => {
     period = b.dataset.period;
-    localStorage.setItem('mb-display-period', period);
     render();
   };
 });
