@@ -15,7 +15,7 @@ function fmtDate(iso) {
 }
 
 // apply saved theme/font
-document.documentElement.dataset.theme = localStorage.getItem('mb-theme') || 'dark';
+document.documentElement.dataset.theme = localStorage.getItem('mb-theme') || 'light';
 document.documentElement.dataset.font = localStorage.getItem('mb-font') || 'roboto';
 
 // mobile / desktop layout mode (auto-detect + manual override)
