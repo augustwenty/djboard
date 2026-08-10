@@ -17,6 +17,11 @@ const AUTH_PASSWORD = process.env.AUTH_PASSWORD || '';
 const AUTH_ENABLED = !!AUTH_PASSWORD;
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const PUBLIC_PATHS = new Set(['/login.html', '/api/login', '/api/session']);
+// Lets a trusted kiosk device (e.g. the Pi driving the TV) skip the login
+// page entirely: /display.html?kiosk=<token> logs the session in the same
+// way a password would. Grants full access, same as AUTH_PASSWORD — only
+// put it in places you physically control. See deploy/README.md.
+const KIOSK_TOKEN = process.env.KIOSK_TOKEN || '';
 
 if (AUTH_ENABLED && !process.env.SESSION_SECRET) {
   console.log('Note: SESSION_SECRET not set — using a random secret, so sessions won\'t survive a restart.');
@@ -25,15 +30,23 @@ if (!AUTH_ENABLED) {
   console.log('Auth disabled (set AUTH_PASSWORD to require a login).');
 }
 
-function checkPassword(input) {
+function safeEqual(input, expected) {
   const a = Buffer.from(String(input));
-  const b = Buffer.from(AUTH_PASSWORD);
+  const b = Buffer.from(expected);
   if (a.length !== b.length) return false;
   return crypto.timingSafeEqual(a, b);
 }
 
+function checkPassword(input) {
+  return safeEqual(input, AUTH_PASSWORD);
+}
+
 function requireAuth(req, res, next) {
   if (!AUTH_ENABLED || req.session.authed || PUBLIC_PATHS.has(req.path)) return next();
+  if (KIOSK_TOKEN && typeof req.query.kiosk === 'string' && safeEqual(req.query.kiosk, KIOSK_TOKEN)) {
+    req.session.authed = true;
+    return next();
+  }
   if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
   return res.redirect('/login.html?next=' + encodeURIComponent(req.originalUrl));
 }

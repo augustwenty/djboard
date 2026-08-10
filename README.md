@@ -89,6 +89,7 @@ automatically on start (no need to `export` anything by hand).
 | `AUTH_PASSWORD` | *(unset)* | Requires this password to use the board — see [Security notes](#security-notes) |
 | `SESSION_SECRET` | *(random each boot)* | Signs the session cookie; set this so logins survive a restart |
 | `COOKIE_SECURE` | *(unset)* | Set to `1` if DJBoard is served over HTTPS |
+| `KIOSK_TOKEN` | *(unset)* | Lets the Pi kiosk skip the login page and land straight on Display mode — see [Raspberry Pi + TV kiosk](#raspberry-pi--tv-kiosk) |
 
 ## Docker
 
@@ -128,6 +129,10 @@ board? See [`deploy/`](deploy/) for a systemd unit plus a kiosk boot script.
   API can be used — see `.env.example`. Leave `AUTH_PASSWORD` unset to run
   with no login at all, e.g. if you're relying on a VPN (Tailscale/WireGuard)
   or an authenticating reverse proxy instead.
+- `KIOSK_TOKEN`, if set, grants the same full access as `AUTH_PASSWORD` (it
+  logs the browser session in, it doesn't create a read-only role) — treat
+  it like a second password and only put it on devices you physically
+  control, such as the kiosk Pi's `.env` file.
 - If you expose DJBoard beyond a trusted network, also set `COOKIE_SECURE=1`
   and put it behind HTTPS (a reverse proxy doing TLS termination is fine) —
   otherwise the session cookie can be intercepted.

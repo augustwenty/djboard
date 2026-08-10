@@ -14,6 +14,16 @@ command -v unclutter >/dev/null && unclutter -idle 0.5 -root &
 CHROMIUM=$(command -v chromium-browser || command -v chromium)
 URL="http://localhost:3113/display.html"
 
+# if the server has AUTH_PASSWORD set, pass KIOSK_TOKEN (same .env file) so
+# this kiosk lands straight on the display instead of the login page —
+# --incognito below wipes cookies on every relaunch, so a real login
+# wouldn't stick anyway.
+ENV_FILE="$HOME/djboard/.env"
+if [ -f "$ENV_FILE" ]; then
+  KIOSK_TOKEN=$(grep -m1 '^KIOSK_TOKEN=' "$ENV_FILE" | cut -d= -f2-)
+  [ -n "${KIOSK_TOKEN:-}" ] && URL="${URL}?kiosk=${KIOSK_TOKEN}"
+fi
+
 if [ -z "$CHROMIUM" ]; then
   echo "No chromium binary found (looked for chromium-browser and chromium)" >&2
   exit 1

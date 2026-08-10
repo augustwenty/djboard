@@ -29,6 +29,11 @@ sudo systemctl enable --now djboard.service
 curl http://localhost:3113/api/notes
 ```
 
+If you set `AUTH_PASSWORD`, also set `KIOSK_TOKEN` in that same `.env` file
+(any long random string works). `kiosk.sh` reads it automatically and
+appends it to the display URL so the TV skips the login page — see
+[Editing notes](#editing-notes) below.
+
 ## 2. Install a minimal X session + Chromium
 
 ```bash
@@ -79,4 +84,6 @@ loop relaunches Chromium if it ever closes.
 
 The TV only ever shows the read-only display. To add/edit notes, open
 `http://<pi-ip-address>:3113/` from your phone or laptop on the same network
-(or over Tailscale if you want that reachable away from home too).
+(or over Tailscale if you want that reachable away from home too). That page
+still asks for `AUTH_PASSWORD` if you set one — only the kiosk's own display,
+authenticated via `KIOSK_TOKEN`, skips the login screen.
