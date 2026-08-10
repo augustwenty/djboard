@@ -74,8 +74,19 @@ function saveDb(db) {
   const tmp = DB_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db, null, 2));
   fs.renameSync(tmp, DB_FILE);
+  broadcastRefresh();
 }
 let db = loadDb();
+
+// ---------- live refresh (SSE) ----------
+// Lets display.html refresh itself the instant a change is saved, instead
+// of waiting on its 5-minute reload timer.
+const sseClients = new Set();
+function broadcastRefresh() {
+  for (const res of sseClients) res.write('event: refresh\ndata: {}\n\n');
+}
+// keep idle SSE connections from being timed out by the browser or a proxy
+setInterval(() => { for (const res of sseClients) res.write(':\n\n'); }, 25 * 1000);
 
 const uid = () => crypto.randomBytes(8).toString('hex');
 
@@ -140,6 +151,17 @@ const upload = multer({
 app.post('/api/upload', upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file' });
   res.json({ url: '/uploads/' + req.file.filename });
+});
+
+app.get('/api/events', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  });
+  res.write('\n');
+  sseClients.add(res);
+  req.on('close', () => sseClients.delete(res));
 });
 
 // ---------- notes ----------

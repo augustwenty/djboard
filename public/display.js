@@ -149,5 +149,11 @@ async function load() {
 }
 
 load();
-// full reload every 5 minutes so the display device always shows current state
+
+// live refresh: re-fetch/re-render the instant the server saves a change,
+// instead of waiting on the fallback timer below
+new EventSource('/api/events').addEventListener('refresh', () => load());
+
+// full reload every 5 minutes as a fallback (e.g. picks up new display.js
+// after a deploy, and recovers if the connection above ever gets stuck)
 setTimeout(() => location.reload(), 5 * 60 * 1000);
