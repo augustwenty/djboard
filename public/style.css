@@ -861,6 +861,16 @@ body.widget-edit .widget-resize { display: block; }
 body.display-page .topbar { padding-bottom: 6px; }
 .display-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .display-meta { font-size: 11px; color: var(--muted); margin-left: 4px; }
+
+/* on a normal browser window the board looks exactly as it did before —
+   .container's old 1400px cap is gone, but #displayStage stays unscaled and
+   fills whatever width is available. Only once the screen is wider than
+   that (a TV) does JS fix the stage back to its old design width and scale
+   it up with a CSS transform, so cards/text/widgets all grow together to
+   fill the screen instead of just adding more small columns. */
+body.display-page .container { max-width: none; }
+.display-stage-wrap { width: 100%; overflow: hidden; }
+.display-stage { transform-origin: top left; }
 body.display-page .board { position: static; column-width: 270px; column-gap: 16px; height: auto !important; }
 body.display-page .note-card {
   position: relative;

@@ -40,6 +40,7 @@ function applyUiMode() {
     btn.title = (mode === 'mobile' ? 'Switch to desktop layout' : 'Switch to mobile layout') +
       (pref === 'auto' ? ' (currently auto-detected)' : '');
   }
+  applyStageScale();
 }
 document.addEventListener('DOMContentLoaded', () => {
   $('uiModeToggle').onclick = () => {
@@ -52,6 +53,47 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 window.addEventListener('resize', applyUiMode);
 applyUiMode();
+
+// autoscale for TVs: below this width the board renders exactly as it
+// always has (this is the old .container content width, 1400px minus its
+// side padding). Past it — a TV, not a browser window — fix the stage back
+// to that design width and scale the whole thing up with a transform so
+// cards, text and widgets all grow together to fill the screen, instead of
+// the masonry layout just adding more same-sized columns.
+const STAGE_DESIGN_WIDTH = 1344;
+let stageScale = 1;
+
+function syncStageHeight() {
+  const wrap = $('displayStageWrap');
+  const stage = $('displayStage');
+  if (!wrap || !stage) return;
+  wrap.style.height = stage.style.transform ? (stage.scrollHeight * stageScale) + 'px' : '';
+}
+
+function applyStageScale() {
+  const wrap = $('displayStageWrap');
+  const stage = $('displayStage');
+  if (!wrap || !stage) return;
+  const mobile = document.documentElement.dataset.ui === 'mobile';
+  const available = wrap.clientWidth;
+  if (mobile || available <= STAGE_DESIGN_WIDTH) {
+    stageScale = 1;
+    stage.style.width = '';
+    stage.style.transform = '';
+    wrap.style.height = '';
+    return;
+  }
+  stageScale = available / STAGE_DESIGN_WIDTH;
+  stage.style.width = STAGE_DESIGN_WIDTH + 'px';
+  stage.style.transform = `scale(${stageScale})`;
+  syncStageHeight();
+}
+window.addEventListener('resize', applyStageScale);
+document.addEventListener('DOMContentLoaded', () => {
+  applyStageScale();
+  const stage = $('displayStage');
+  if (stage && window.ResizeObserver) new ResizeObserver(syncStageHeight).observe(stage);
+});
 
 function periodStart(p) {
   const now = new Date();
