@@ -24,36 +24,6 @@ const theme = (themeParam === 'light' || themeParam === 'dark') ? themeParam : (
 document.documentElement.dataset.theme = theme;
 document.documentElement.dataset.font = localStorage.getItem('mb-font') || 'roboto';
 
-// mobile / desktop layout mode (auto-detect + manual override)
-const mobileQuery = matchMedia('(max-width: 820px)');
-function detectMobile() {
-  return mobileQuery.matches;
-}
-mobileQuery.addEventListener('change', () => applyUiMode());
-function applyUiMode() {
-  const pref = localStorage.getItem('mb-ui') || 'auto';
-  const mode = pref === 'auto' ? (detectMobile() ? 'mobile' : 'desktop') : pref;
-  document.documentElement.dataset.ui = mode;
-  const btn = $('uiModeToggle');
-  if (btn) {
-    btn.textContent = mode === 'mobile' ? '🖥' : '📱';
-    btn.title = (mode === 'mobile' ? 'Switch to desktop layout' : 'Switch to mobile layout') +
-      (pref === 'auto' ? ' (currently auto-detected)' : '');
-  }
-  applyStageScale();
-}
-document.addEventListener('DOMContentLoaded', () => {
-  $('uiModeToggle').onclick = () => {
-    const next = document.documentElement.dataset.ui === 'mobile' ? 'desktop' : 'mobile';
-    const auto = detectMobile() ? 'mobile' : 'desktop';
-    localStorage.setItem('mb-ui', next === auto ? 'auto' : next);
-    applyUiMode();
-  };
-  applyUiMode();
-});
-window.addEventListener('resize', applyUiMode);
-applyUiMode();
-
 // autoscale for TVs: below this width the board renders exactly as it
 // always has (this is the old .container content width, 1400px minus its
 // side padding). Past it — a TV, not a browser window — fix the stage back
@@ -94,6 +64,36 @@ document.addEventListener('DOMContentLoaded', () => {
   const stage = $('displayStage');
   if (stage && window.ResizeObserver) new ResizeObserver(syncStageHeight).observe(stage);
 });
+
+// mobile / desktop layout mode (auto-detect + manual override)
+const mobileQuery = matchMedia('(max-width: 820px)');
+function detectMobile() {
+  return mobileQuery.matches;
+}
+mobileQuery.addEventListener('change', () => applyUiMode());
+function applyUiMode() {
+  const pref = localStorage.getItem('mb-ui') || 'auto';
+  const mode = pref === 'auto' ? (detectMobile() ? 'mobile' : 'desktop') : pref;
+  document.documentElement.dataset.ui = mode;
+  const btn = $('uiModeToggle');
+  if (btn) {
+    btn.textContent = mode === 'mobile' ? '🖥' : '📱';
+    btn.title = (mode === 'mobile' ? 'Switch to desktop layout' : 'Switch to mobile layout') +
+      (pref === 'auto' ? ' (currently auto-detected)' : '');
+  }
+  applyStageScale();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  $('uiModeToggle').onclick = () => {
+    const next = document.documentElement.dataset.ui === 'mobile' ? 'desktop' : 'mobile';
+    const auto = detectMobile() ? 'mobile' : 'desktop';
+    localStorage.setItem('mb-ui', next === auto ? 'auto' : next);
+    applyUiMode();
+  };
+  applyUiMode();
+});
+window.addEventListener('resize', applyUiMode);
+applyUiMode();
 
 function periodStart(p) {
   const now = new Date();
