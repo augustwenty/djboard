@@ -80,7 +80,16 @@
     <!-- ===== widget canvas ===== -->
     <div id="widgetCanvas" class="widget-canvas"></div>
 
-    <div id="board" class="board"></div>
+    <div class="board-row">
+      <div id="board" class="board"></div>
+      <div id="doneColumn" class="done-column">
+        <div class="done-column-header">
+          <span>✓ Done</span>
+          <button id="clearDoneBtn" class="icon-btn done-clear-btn" title="Delete all done cards">🗑</button>
+        </div>
+        <div id="doneColumnList" class="done-column-list"></div>
+      </div>
+    </div>
     <div id="emptyState" class="empty-state" hidden>
       <p>No notes yet.</p>
       <p class="muted">Hit <strong>+</strong> to capture your first thought.</p>

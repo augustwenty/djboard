@@ -28,7 +28,13 @@
     <div id="displayStageWrap" class="display-stage-wrap">
       <div id="displayStage" class="display-stage">
         <div id="widgetCanvas" class="widget-canvas"></div>
-        <div id="board" class="board"></div>
+        <div class="board-row">
+          <div id="board" class="board"></div>
+          <div id="doneColumn" class="done-column">
+            <div class="done-column-header"><span>✓ Done</span></div>
+            <div id="doneColumnList" class="done-column-list"></div>
+          </div>
+        </div>
       </div>
     </div>
     <p id="displayEmpty" class="muted" style="text-align:center; padding:60px 0" hidden>Nothing here for this period.</p>

@@ -2,6 +2,7 @@
 
 let notes = [];
 let tags = [];
+let groups = [];
 // not saved across reloads on purpose — a kiosk device should always come
 // up showing everything, regardless of what was last clicked on it
 let period = 'all';
@@ -114,6 +115,50 @@ function inPeriod(n) {
   return new Date(n.updatedAt) >= start || new Date(n.createdAt) >= start;
 }
 
+/* ============ freeform board layout (read-only mirror of app.js) ============
+   Same saved x/y positions as the editable board — this page never writes
+   them back, it just lays cards out where the board already put them. Notes
+   that have never been positioned (no saved x/y) fall back to a packed
+   column placement, computed locally each render rather than persisted. */
+const BOARD_COL_W = 270;
+const BOARD_GAP = 16;
+
+function layoutBoardHeight() {
+  const board = $('board');
+  let maxBottom = 0;
+  for (const el of board.children) {
+    if (el.classList.contains('note-card') || el.classList.contains('note-stack')) {
+      maxBottom = Math.max(maxBottom, el.offsetTop + el.offsetHeight);
+    }
+  }
+  board.style.height = Math.max(maxBottom + 24, 0) + 'px';
+}
+
+function placeUnpositioned(board, entries) {
+  const width = board.clientWidth || 900;
+  const cols = Math.max(1, Math.floor((width + BOARD_GAP) / (BOARD_COL_W + BOARD_GAP)));
+  const colHeights = new Array(cols).fill(0);
+
+  const positioned = entries.filter((e) => e.n.x != null && e.n.y != null);
+  const unpositioned = entries.filter((e) => e.n.x == null || e.n.y == null);
+
+  positioned.forEach(({ n, card }) => {
+    const col = Math.min(cols - 1, Math.max(0, Math.round(n.x / (BOARD_COL_W + BOARD_GAP))));
+    colHeights[col] = Math.max(colHeights[col], n.y + card.offsetHeight + BOARD_GAP);
+  });
+
+  unpositioned.sort((a, b) => (b.n.pinned - a.n.pinned));
+  unpositioned.forEach(({ n, card }) => {
+    let col = 0;
+    for (let i = 1; i < cols; i++) if (colHeights[i] < colHeights[col]) col = i;
+    const x = col * (BOARD_COL_W + BOARD_GAP);
+    const y = colHeights[col];
+    card.style.left = x + 'px';
+    card.style.top = y + 'px';
+    colHeights[col] = y + card.offsetHeight + BOARD_GAP;
+  });
+}
+
 function noteCard(n) {
   const card = document.createElement('div');
   card.className = 'note-card' + (n.pinned ? ' pinned-card' : '') + (n.done ? ' done-card' : '');
@@ -149,28 +194,104 @@ function noteCard(n) {
   return card;
 }
 
+// read-only mirror of app.js's stackCard — no name input, no drag, no way to
+// pull a note back out, just the same face a grouped deck shows on the board
+function stackCard(g, members) {
+  const wrap = document.createElement('div');
+  wrap.className = 'note-stack';
+
+  const header = document.createElement('div');
+  header.className = 'stack-header';
+  const icon = document.createElement('span');
+  icon.className = 'stack-title-icon';
+  icon.textContent = '🗂';
+  const name = document.createElement('span');
+  name.className = 'stack-name-input';
+  name.textContent = g.name || 'Untitled group';
+  const badge = document.createElement('span');
+  badge.className = 'stack-badge';
+  badge.textContent = members.length;
+  header.append(icon, name, badge);
+  wrap.appendChild(header);
+
+  const list = document.createElement('div');
+  list.className = 'card-checklist group-checklist';
+  members
+    .slice()
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+    .forEach((n) => {
+      const row = document.createElement('div');
+      row.className = 'check-item' + (n.done ? ' done' : '');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = n.done;
+      cb.disabled = true;
+      const span = document.createElement('span');
+      span.textContent = n.title || n.text || 'Untitled note';
+      row.append(cb, span);
+      list.appendChild(row);
+    });
+  wrap.appendChild(list);
+  return wrap;
+}
+
+function renderDoneColumn(doneNotes) {
+  const list = $('doneColumnList');
+  list.innerHTML = '';
+  doneNotes
+    .slice()
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+    .forEach((n) => list.appendChild(noteCard(n)));
+}
+
 function render() {
   document.querySelectorAll('.period-btn').forEach((b) =>
     b.classList.toggle('active', b.dataset.period === period));
   const board = $('board');
   board.innerHTML = '';
+  board.style.height = '';
+
   const visible = notes.filter(inPeriod);
-  const pinned = visible.filter((n) => n.pinned);
-  const rest = visible.filter((n) => !n.pinned);
-  if (pinned.length) {
-    const lbl = document.createElement('div');
-    lbl.className = 'section-label';
-    lbl.textContent = '📌 Pinned';
-    board.appendChild(lbl);
-    pinned.forEach((n) => board.appendChild(noteCard(n)));
-    if (rest.length) {
-      const lbl2 = document.createElement('div');
-      lbl2.className = 'section-label';
-      lbl2.textContent = 'Notes';
-      board.appendChild(lbl2);
-    }
+  const visibleIds = new Set(visible.map((n) => n.id));
+  const ungrouped = visible.filter((n) => !n.groupId);
+  const openNotes = ungrouped.filter((n) => !n.done);
+  const doneNotes = ungrouped.filter((n) => n.done);
+  // same rule app.js uses for tag/search filtering — a group counts as visible
+  // (and shows in full) as soon as any one of its members is in the period
+  const visibleGroups = groups
+    .map((g) => ({ g, members: notes.filter((n) => n.groupId === g.id) }))
+    .filter(({ members }) => members.length >= 2 && members.some((n) => visibleIds.has(n.id)));
+
+  renderDoneColumn(doneNotes);
+
+  const entries = openNotes.map((n) => {
+    const card = noteCard(n);
+    const hasPos = n.x != null && n.y != null;
+    card.style.left = (hasPos ? n.x : 0) + 'px';
+    card.style.top = (hasPos ? n.y : 0) + 'px';
+    if (!hasPos) card.style.visibility = 'hidden'; // only unplaced cards need the measure-then-place pass
+    board.appendChild(card);
+    return { n, card, hasPos };
+  });
+
+  visibleGroups.forEach(({ g, members }) => {
+    const el = stackCard(g, members);
+    el.style.left = (g.x ?? 20) + 'px';
+    el.style.top = (g.y ?? 20) + 'px';
+    board.appendChild(el);
+  });
+
+  if (entries.some((e) => !e.hasPos)) {
+    requestAnimationFrame(() => {
+      placeUnpositioned(board, entries);
+      entries.forEach((e) => { e.card.style.visibility = ''; });
+      layoutBoardHeight();
+      applyStageScale();
+    });
+  } else {
+    layoutBoardHeight();
   }
-  rest.forEach((n) => board.appendChild(noteCard(n)));
+
   $('displayEmpty').hidden = visible.length > 0;
   $('displayMeta').textContent =
     `${visible.length} note${visible.length === 1 ? '' : 's'} · updated ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · refreshes every 5 min`;
@@ -184,11 +305,13 @@ document.querySelectorAll('.period-btn').forEach((b) => {
 });
 
 async function load() {
-  [notes, tags] = await Promise.all([
+  [notes, tags, groups] = await Promise.all([
     (await fetch('/api/notes')).json(),
     (await fetch('/api/tags')).json(),
+    (await fetch('/api/groups')).json(),
   ]);
   render();
+  applyStageScale();
 }
 
 load();

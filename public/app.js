@@ -339,14 +339,27 @@ function findGroupDropTarget(draggedEl, excludeId, excludeType, allowedTypes) {
   return best;
 }
 
+// true while (clientX, clientY) sits over the "Done" column — used to let a drag
+// dropped there mark the dragged note(s) done instead of saving a board position
+function isOverDoneColumn(clientX, clientY) {
+  const r = $('doneColumn').getBoundingClientRect();
+  return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
+}
+function setDoneColumnHighlight(v) { $('doneColumn').classList.toggle('drag-over', v); }
+
 function attachNoteDrag(card, n) {
-  let dragging = false, moved = false, start = null, group = null, dropTarget = null;
+  let dragging = false, moved = false, start = null, group = null, dropTarget = null, overDone = false;
 
   const clearDropTarget = () => {
     if (!dropTarget) return;
     dropTarget.el.classList.remove('group-drop-target');
     dropTarget = null;
     hideDropHint();
+  };
+  const setOverDone = (v) => {
+    if (overDone === v) return;
+    overDone = v;
+    setDoneColumnHighlight(v);
   };
 
   card.addEventListener('pointerdown', (e) => {
@@ -392,8 +405,13 @@ function attachNoteDrag(card, n) {
       g.card.style.top = g.n.y + 'px';
     });
     layoutBoardHeight();
-    // dropping onto another card/stack only makes sense when dragging a single card
-    if (group.length === 1) {
+    // hovering the done column takes priority over grouping — a card dropped there
+    // gets marked done rather than stacked onto whatever's underneath it
+    setOverDone(isOverDoneColumn(e.clientX, e.clientY));
+    if (overDone) {
+      clearDropTarget();
+    } else if (group.length === 1) {
+      // dropping onto another card/stack only makes sense when dragging a single card
       const found = findGroupDropTarget(card, n.id, 'note', ['note', 'stack']);
       if (found !== dropTarget) {
         clearDropTarget();
@@ -411,6 +429,14 @@ function attachNoteDrag(card, n) {
     hideAlignGuides();
     group.forEach((g) => g.card.classList.remove('dragging'));
     card._suppressClick = true; // swallow the click that would otherwise open the note right after a drag
+    if (overDone) {
+      setOverDone(false);
+      const toMark = group;
+      group = null;
+      await Promise.all(toMark.map((g) => api.send('PUT', '/api/notes/' + g.n.id, { done: true })));
+      await loadData();
+      return;
+    }
     if (dropTarget) {
       const target = dropTarget;
       clearDropTarget();
@@ -431,7 +457,7 @@ function attachNoteDrag(card, n) {
     group = null;
     await Promise.all(toSave.map((g) => api.send('PUT', '/api/notes/' + g.n.id, { x: g.n.x, y: g.n.y, z: g.n.z })));
   });
-  card.addEventListener('pointercancel', () => { dragging = false; group = null; clearDropTarget(); hideAlignGuides(); });
+  card.addEventListener('pointercancel', () => { dragging = false; group = null; clearDropTarget(); setOverDone(false); hideAlignGuides(); });
 }
 
 /* ============ note groups (stacked decks) ============ */
@@ -517,13 +543,18 @@ function stackCard(g, members) {
 // to the pointer with no way to release it). A pointerup anywhere on the
 // page always reaches document, so this can't get stuck the same way.
 function attachStackDrag(el, g) {
-  let dragging = false, moved = false, start = null, dropTarget = null, pressedNoteId = null, activePointerId = null;
+  let dragging = false, moved = false, start = null, dropTarget = null, pressedNoteId = null, activePointerId = null, overDone = false;
 
   const clearDropTarget = () => {
     if (!dropTarget) return;
     dropTarget.el.classList.remove('group-drop-target');
     dropTarget = null;
     hideDropHint();
+  };
+  const setOverDone = (v) => {
+    if (overDone === v) return;
+    overDone = v;
+    setDoneColumnHighlight(v);
   };
 
   const onMove = (e) => {
@@ -545,15 +576,21 @@ function attachStackDrag(el, g) {
     el.style.left = g.x + 'px';
     el.style.top = g.y + 'px';
     layoutBoardHeight();
-    // a stack can only absorb a loose note by dropping onto it — merging two
-    // stacks together isn't supported yet, so only note cards count as targets
-    const found = findGroupDropTarget(el, g.id, 'stack', ['note']);
-    if (found !== dropTarget) {
+    // hovering the done column takes priority over absorbing a loose note
+    setOverDone(isOverDoneColumn(e.clientX, e.clientY));
+    if (overDone) {
       clearDropTarget();
-      dropTarget = found;
-      if (dropTarget) { dropTarget.el.classList.add('group-drop-target'); showDropHint(dropTarget.el); }
-    } else if (dropTarget) {
-      showDropHint(dropTarget.el);
+    } else {
+      // a stack can only absorb a loose note by dropping onto it — merging two
+      // stacks together isn't supported yet, so only note cards count as targets
+      const found = findGroupDropTarget(el, g.id, 'stack', ['note']);
+      if (found !== dropTarget) {
+        clearDropTarget();
+        dropTarget = found;
+        if (dropTarget) { dropTarget.el.classList.add('group-drop-target'); showDropHint(dropTarget.el); }
+      } else if (dropTarget) {
+        showDropHint(dropTarget.el);
+      }
     }
   };
 
@@ -575,6 +612,16 @@ function attachStackDrag(el, g) {
     }
     hideAlignGuides();
     el.classList.remove('dragging');
+    if (overDone) {
+      setOverDone(false);
+      // dropping the whole stack on Done finishes every note in it, then disbands
+      // the group (notes are kept, just unlinked) so each shows up on its own in the column
+      const memberIds = groupMembers(g).map((n) => n.id);
+      await Promise.all(memberIds.map((id) => api.send('PUT', '/api/notes/' + id, { done: true })));
+      await api.send('DELETE', '/api/groups/' + g.id);
+      await loadData();
+      return;
+    }
     if (dropTarget) {
       const target = dropTarget;
       clearDropTarget();
@@ -593,6 +640,7 @@ function attachStackDrag(el, g) {
     stopListening();
     dragging = false;
     clearDropTarget();
+    setOverDone(false);
     hideAlignGuides();
     el.classList.remove('dragging');
   };
@@ -810,20 +858,45 @@ function openKbdFocused() {
   if (n) openNoteModal(n);
 }
 
+let doneColumnNoteIds = [];
+function renderDoneColumn(doneNotes) {
+  doneColumnNoteIds = doneNotes.map((n) => n.id);
+  const list = $('doneColumnList');
+  list.innerHTML = '';
+  doneNotes
+    .slice()
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+    .forEach((n) => {
+      const card = noteCard(n);
+      list.appendChild(card);
+    });
+}
+$('clearDoneBtn').onclick = async () => {
+  const ids = doneColumnNoteIds;
+  if (!ids.length) return;
+  if (!confirmDestructive(`Delete all ${ids.length} card${ids.length === 1 ? '' : 's'} in the Done column? This can't be undone.`)) return;
+  await Promise.all(ids.map((id) => api.send('DELETE', '/api/notes/' + id)));
+  await loadData();
+};
+
 function renderBoard() {
   const board = $('board');
   board.innerHTML = '';
   board.style.height = '';
   cardById.clear();
   const filtering = !!(activeTagIds.size || searchQuery);
-  const ungrouped = notes.filter((n) => !n.groupId && noteMatches(n));
+  const matched = notes.filter((n) => !n.groupId && noteMatches(n));
+  const ungrouped = matched.filter((n) => !n.done);
+  const doneNotes = matched.filter((n) => n.done);
   const visibleGroups = groups
     .map((g) => ({ g, members: groupMembers(g) }))
     .filter(({ members }) => members.length >= 2 && (!filtering || members.some(noteMatches)));
 
+  renderDoneColumn(doneNotes);
+
   $('emptyState').hidden = notes.length > 0;
 
-  if (notes.length && !ungrouped.length && !visibleGroups.length) {
+  if (notes.length && !ungrouped.length && !visibleGroups.length && !doneNotes.length) {
     const none = document.createElement('p');
     none.className = 'muted';
     none.textContent = 'No notes match your search.';
