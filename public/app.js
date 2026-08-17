@@ -7,6 +7,7 @@ const TAG_COLORS = ['#4ade80', '#60a5fa', '#f87171', '#fbbf24', '#c084fc', '#f47
 let notes = [];
 let tags = [];
 let groups = [];
+let settings = {};
 let activeTagIds = new Set();
 let searchQuery = '';
 let selectedNoteIds = new Set();
@@ -346,6 +347,59 @@ function isOverDoneColumn(clientX, clientY) {
   return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
 }
 function setDoneColumnHighlight(v) { $('doneColumn').classList.toggle('drag-over', v); }
+
+// the done column no longer reserves a fixed slot in the board row — it's a
+// freely draggable box (like a note card) so it can be moved out of the way
+// of whatever the freeform board's column layout happens to place beneath it.
+// Its position is saved server-side (not per-note) since it's a single shared
+// piece of board furniture, not board content.
+function applyDoneColumnPos() {
+  const pos = settings.doneColumn;
+  if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return;
+  const el = $('doneColumn');
+  el.style.right = 'auto';
+  el.style.left = pos.x + 'px';
+  el.style.top = pos.y + 'px';
+}
+
+function attachDoneColumnDrag() {
+  const el = $('doneColumn');
+  const header = el.querySelector('.done-column-header');
+  let dragging = false, moved = false, start = null, startLeft = 0, startTop = 0;
+
+  header.addEventListener('pointerdown', (e) => {
+    if (document.documentElement.dataset.ui === 'mobile') return;
+    if (e.target.closest('button')) return;
+    moved = false;
+    dragging = true;
+    start = { px: e.clientX, py: e.clientY };
+    startLeft = el.offsetLeft;
+    startTop = el.offsetTop;
+    try { header.setPointerCapture(e.pointerId); } catch {}
+  });
+  header.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - start.px, dy = e.clientY - start.py;
+    if (!moved) {
+      if (Math.hypot(dx, dy) < 5) return;
+      moved = true;
+      el.classList.add('dragging');
+    }
+    el.style.right = 'auto';
+    el.style.left = snapBoard(Math.max(0, startLeft + dx)) + 'px';
+    el.style.top = snapBoard(Math.max(0, startTop + dy)) + 'px';
+  });
+  header.addEventListener('pointerup', async (e) => {
+    if (!dragging) return;
+    dragging = false;
+    if (!moved) return;
+    el.classList.remove('dragging');
+    const pos = { x: el.offsetLeft, y: el.offsetTop };
+    settings.doneColumn = pos;
+    await api.send('PUT', '/api/settings', { doneColumn: pos }).catch(() => {});
+  });
+  header.addEventListener('pointercancel', () => { dragging = false; el.classList.remove('dragging'); });
+}
 
 function attachNoteDrag(card, n) {
   let dragging = false, moved = false, start = null, group = null, dropTarget = null, overDone = false;
@@ -1598,5 +1652,7 @@ async function loadData() {
 }
 
 attachMarquee($('board'));
+attachDoneColumnDrag();
 applyPrefs();
 loadData();
+api.get('/api/settings').then((s) => { settings = s || {}; applyDoneColumnPos(); }).catch(() => {});

@@ -3,6 +3,7 @@
 let notes = [];
 let tags = [];
 let groups = [];
+let settings = {};
 // not saved across reloads on purpose — a kiosk device should always come
 // up showing everything, regardless of what was last clicked on it
 let period = 'all';
@@ -304,13 +305,26 @@ document.querySelectorAll('.period-btn').forEach((b) => {
   };
 });
 
+// mirrors index.html's done-column position (set there by dragging its
+// header) so the read-only kiosk view matches — this page never drags it itself
+function applyDoneColumnPos() {
+  const pos = settings.doneColumn;
+  if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return;
+  const el = $('doneColumn');
+  el.style.right = 'auto';
+  el.style.left = pos.x + 'px';
+  el.style.top = pos.y + 'px';
+}
+
 async function load() {
-  [notes, tags, groups] = await Promise.all([
+  [notes, tags, groups, settings] = await Promise.all([
     (await fetch('/api/notes')).json(),
     (await fetch('/api/tags')).json(),
     (await fetch('/api/groups')).json(),
+    (await fetch('/api/settings')).json(),
   ]);
   render();
+  applyDoneColumnPos();
   applyStageScale();
 }
 

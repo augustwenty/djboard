@@ -146,6 +146,7 @@ input, textarea, select { font-family: inherit; }
   isolation: isolate; /* keep dragged note z-index from climbing above modals */
 }
 .board-row {
+  position: relative; /* anchor for the freely-draggable done column */
   display: flex;
   align-items: flex-start;
   gap: 20px;
@@ -153,14 +154,21 @@ input, textarea, select { font-family: inherit; }
 .board-row .board { flex: 1; min-width: 0; }
 
 /* "Done" drop column — drag a card here (or mark it done from the context menu)
-   and it moves out of the freeform board into this plain stacked list */
+   and it moves out of the freeform board into this plain stacked list. It's
+   positioned freely (like a note card) rather than reserving a fixed slot in
+   the flex row, so it can be dragged wherever it won't collide with cards —
+   see the done-column-header drag handle in app.js. */
 .done-column {
+  position: absolute;
+  top: 0;
+  right: 0;
   flex-shrink: 0;
   width: 270px;
   min-height: 200px;
   padding: 12px;
   border: 1px dashed var(--border);
   border-radius: 12px;
+  background: var(--bg);
   transition: border-color 0.12s, background 0.12s;
 }
 .done-column.drag-over {
@@ -178,7 +186,11 @@ input, textarea, select { font-family: inherit; }
   color: var(--muted);
   text-transform: uppercase;
   margin-bottom: 10px;
+  cursor: grab;
+  touch-action: none;
 }
+.done-column.dragging { cursor: grabbing; opacity: 0.85; box-shadow: 0 10px 28px var(--shadow); transition: none; }
+.done-column.dragging .done-column-header { cursor: grabbing; }
 .done-clear-btn {
   width: 26px;
   height: 26px;
@@ -1418,7 +1430,8 @@ body.display-page .stack-name-input { cursor: default; user-select: none; }
 
 /* single-column board — freeform x/y positions are ignored, notes stack full-width in visual order */
 :root[data-ui='mobile'] .board-row { flex-direction: column; }
-:root[data-ui='mobile'] .done-column { width: 100%; }
+:root[data-ui='mobile'] .done-column { position: static !important; width: 100%; }
+:root[data-ui='mobile'] .done-column-header { cursor: default; }
 :root[data-ui='mobile'] .board { column-width: auto; column-count: 1; height: auto !important; }
 :root[data-ui='mobile'] .note-card { position: static !important; width: 100% !important; margin-bottom: 14px; padding: 16px; }
 :root[data-ui='mobile'] .note-stack { position: relative !important; width: 100% !important; margin-bottom: 14px; }

@@ -369,6 +369,15 @@ app.delete('/api/reminders/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- settings (small persisted UI state, e.g. done column position) ----------
+app.get('/api/settings', (req, res) => res.json(db.settings));
+
+app.put('/api/settings', (req, res) => {
+  Object.assign(db.settings, req.body || {});
+  saveDb(db);
+  res.json(db.settings);
+});
+
 // ---------- reminder scheduler ----------
 function advanceReminder(r) {
   const step = { hourly: 3600e3, daily: 86400e3, weekly: 604800e3 }[r.freq];
