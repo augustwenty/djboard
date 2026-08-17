@@ -53,12 +53,14 @@ function applyStageScale() {
     stage.style.width = '';
     stage.style.transform = '';
     wrap.style.height = '';
+    applyDoneColumnPos();
     return;
   }
   stageScale = available / STAGE_DESIGN_WIDTH;
   stage.style.width = STAGE_DESIGN_WIDTH + 'px';
   stage.style.transform = `scale(${stageScale})`;
   syncStageHeight();
+  applyDoneColumnPos();
 }
 window.addEventListener('resize', applyStageScale);
 document.addEventListener('DOMContentLoaded', () => {
@@ -306,13 +308,21 @@ document.querySelectorAll('.period-btn').forEach((b) => {
 });
 
 // mirrors index.html's done-column position (set there by dragging its
-// header) so the read-only kiosk view matches — this page never drags it itself
+// header) so the read-only kiosk view matches — this page never drags it
+// itself. index.html's board-row maxes out at 1344px (the .container cap),
+// but display's stage only matches that width once it's actually in TV
+// scale mode (see applyStageScale) — on a plain, narrower browser window the
+// stage renders at its own native (smaller) width instead, so a position
+// saved from a wide index.html window can land past the right edge here.
+// Clamp it back onto whatever width the stage actually has right now.
 function applyDoneColumnPos() {
   const pos = settings.doneColumn;
   if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return;
   const el = $('doneColumn');
+  const stage = $('displayStage');
+  const maxX = Math.max(0, (stage ? stage.clientWidth : 0) - el.offsetWidth);
   el.style.right = 'auto';
-  el.style.left = pos.x + 'px';
+  el.style.left = Math.min(pos.x, maxX) + 'px';
   el.style.top = pos.y + 'px';
 }
 
@@ -324,7 +334,6 @@ async function load() {
     (await fetch('/api/settings')).json(),
   ]);
   render();
-  applyDoneColumnPos();
   applyStageScale();
 }
 
